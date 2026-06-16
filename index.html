@@ -67,7 +67,196 @@
             border-color: #6366f1 !important;
         }
     </style>
+
+    <!-- Firebase SDK (Google 소셜 로그인) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDZviv3Nc1I4rL7VGhdEP9ozbupSu-R45I",
+            authDomain: "laundrygo-sop.firebaseapp.com",
+            projectId: "laundrygo-sop",
+            storageBucket: "laundrygo-sop.firebasestorage.app",
+            messagingSenderId: "244997131170",
+            appId: "1:244997131170:web:1f70864631e02b5b8dc0fb"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db  = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        window._db   = db;
+        window._auth = auth;
+
+        // ── 인증 상태 변화 감지 ──────────────────────────────
+        onAuthStateChanged(auth, async (user) => {
+            window._currentUser = user;
+
+            if (user) {
+                // 로그인 성공 → 뷰어 권한 확인
+                const allowed = await checkViewerAccess(user.email);
+                if (!allowed) {
+                    // 접근 권한 없음 → 안내 후 로그아웃
+                    showAuthScreen('denied', user.email);
+                    await signOut(auth);
+                    return;
+                }
+
+                // 편집자 여부 판별
+                const isEditor = window._editorEmails.includes(user.email);
+                window._isEditor = isEditor;
+
+                // UI 업데이트
+                document.getElementById('auth-modal').classList.add('hidden');
+                document.getElementById('user-badge').classList.remove('hidden');
+                document.getElementById('user-email').innerText = user.displayName || user.email;
+                document.getElementById('user-avatar').src =
+                    user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.email)}&background=4f46e5&color=fff`;
+
+                if (isEditor) {
+                    document.getElementById('edit-mode-btn').classList.remove('hidden');
+                    document.getElementById('role-badge').innerText = '✏️ 편집자';
+                    document.getElementById('role-badge').className =
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700';
+                } else {
+                    document.getElementById('edit-mode-btn').classList.add('hidden');
+                    document.getElementById('role-badge').innerText = '👁 뷰어';
+                    document.getElementById('role-badge').className =
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500';
+                }
+
+                loadSOPFromFirestore();
+                listenSOPChanges();
+
+            } else {
+                showAuthScreen('login');
+                document.getElementById('user-badge').classList.add('hidden');
+            }
+        });
+
+        // ── 뷰어 접근 허용 여부 확인 (Firestore allowedEmails 컬렉션) ──
+        async function checkViewerAccess(email) {
+            // 편집자는 항상 통과
+            if (window._editorEmails.includes(email)) return true;
+            try {
+                const ref = doc(db, 'access', 'viewers');
+                const snap = await getDoc(ref);
+                if (!snap.exists()) return false;
+                const list = snap.data().emails || [];
+                return list.includes(email);
+            } catch(e) {
+                console.error('접근 권한 확인 실패:', e);
+                return false;
+            }
+        }
+
+        // ── 화면 전환 ──────────────────────────────────────
+        function showAuthScreen(state, email = '') {
+            const modal = document.getElementById('auth-modal');
+            modal.classList.remove('hidden');
+            document.getElementById('screen-login').classList.add('hidden');
+            document.getElementById('screen-denied').classList.add('hidden');
+
+            if (state === 'login') {
+                document.getElementById('screen-login').classList.remove('hidden');
+            } else if (state === 'denied') {
+                document.getElementById('denied-email').innerText = email;
+                document.getElementById('screen-denied').classList.remove('hidden');
+            }
+        }
+
+        // ── 구글 로그인 ────────────────────────────────────
+        window.doGoogleLogin = async function() {
+            const btn = document.getElementById('google-login-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 로그인 중...';
+            try {
+                await signInWithPopup(auth, provider);
+            } catch(e) {
+                btn.disabled = false;
+                btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-4 h-4"> Google 계정으로 로그인';
+                if (e.code !== 'auth/popup-closed-by-user') {
+                    window.showCustomToast('로그인 오류: ' + e.message);
+                }
+            }
+        };
+
+        // ── 로그아웃 ───────────────────────────────────────
+        window.doLogout = async function() {
+            await signOut(auth);
+            window.showCustomToast('로그아웃되었습니다.');
+        };
+
+        // ── Firestore SOP 로드 ─────────────────────────────
+        window.loadSOPFromFirestore = async function() {
+            try {
+                const snap = await getDoc(doc(db, 'sop', 'main'));
+                if (snap.exists() && snap.data().sopData) {
+                    window.sopData = snap.data().sopData;
+                    window.renderAsideMenu && window.renderAsideMenu();
+                    window.renderActiveSlide && window.renderActiveSlide();
+                    window.showCustomToast('✅ 최신 SOP를 불러왔습니다.');
+                } else {
+                    await window.saveSOPToFirestore();
+                }
+            } catch(e) {
+                window.showCustomToast('⚠️ 데이터 로드 실패. 기본 데이터로 표시합니다.');
+                window.renderAsideMenu && window.renderAsideMenu();
+                window.renderActiveSlide && window.renderActiveSlide();
+            }
+        };
+
+        // ── Firestore SOP 저장 ─────────────────────────────
+        window.saveSOPToFirestore = async function() {
+            if (!window._isEditor) {
+                window.showCustomToast('⛔ 편집 권한이 없습니다.');
+                return;
+            }
+            try {
+                await setDoc(doc(db, 'sop', 'main'), {
+                    sopData: window.sopData,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: window._currentUser?.email || 'unknown'
+                });
+                window.showCustomToast('✅ 저장 완료! 모든 사용자에게 즉시 반영됩니다.');
+            } catch(e) {
+                window.showCustomToast('⚠️ 저장 실패: ' + e.message);
+            }
+        };
+
+        // ── 실시간 변경 감지 ───────────────────────────────
+        window.listenSOPChanges = function() {
+            onSnapshot(doc(db, 'sop', 'main'), (snap) => {
+                if (snap.exists() && snap.data().sopData && !window._isEditing) {
+                    window.sopData = snap.data().sopData;
+                    window.renderAsideMenu && window.renderAsideMenu();
+                    window.renderActiveSlide && window.renderActiveSlide();
+                }
+            });
+        };
+    </script>
+
 </head>
+
+<script>
+    // ★ 편집자 이메일 목록 (여기 이메일만 편집 가능, 나머지는 뷰어)
+    window._editorEmails = [
+"jykim@lifegoeson.kr"
+"mschoi@lifegoeson.kr"
+"bsyoon@lifegoeson.kr"
+"nylee@lifegoeson.kr"
+"cmyong@lifegoeson.kr"
+"yjlim@lifegoeson.kr"
+    ];
+    window._isEditor = false;
+    window._isEditing = false;
+    window._currentUser = null;
+</script>
+
 <body class="bg-slate-100 min-h-screen w-screen flex flex-col justify-center items-center select-none font-sans overflow-hidden relative" style="-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;">
 
 <div class="presentation-wrapper bg-white rounded-2xl overflow-hidden flex flex-col relative border border-slate-200">
@@ -84,8 +273,8 @@
             <button onclick="toggleEditMode()" id="edit-mode-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition">
                 <i class="fa-solid fa-pen-to-square"></i> <span id="edit-mode-text">편집 모드 활성화</span>
             </button>
-            <button onclick="exportModifiedHTML()" id="download-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition hidden">
-                <i class="fa-solid fa-file-arrow-down"></i> SOP 파일 저장
+            <button onclick="saveSOPToFirestore()" id="download-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition hidden">
+                <i class="fa-solid fa-cloud-arrow-up"></i> 전체 저장 (공유 반영)
             </button>
             <span class="w-px h-4 bg-slate-700"></span>
             <div class="flex items-center gap-3 text-xs text-slate-400">
@@ -93,83 +282,75 @@
                 <span class="w-1 h-1 rounded-full bg-slate-600"></span>
                 <span class="font-bold text-indigo-400">런드리고 세탁팩토리</span>
             </div>
+
+            <!-- 유저 뱃지 (로그인 후 표시) -->
+            <div id="user-badge" class="hidden flex items-center gap-2.5">
+                <span id="role-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">👁 뷰어</span>
+                <img id="user-avatar" src="" class="w-6 h-6 rounded-full border border-slate-600">
+                <span id="user-email" class="text-[11px] text-slate-300 font-montserrat max-w-[140px] truncate"></span>
+                <button onclick="doLogout()" class="text-[10px] text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
         </div>
     </header>
 
-    <!-- 2. 메인 컨텐츠 영역 (좌측 고정 메뉴 / 우측 슬라이드 뷰포트) -->
-    <div class="flex-grow flex relative overflow-hidden bg-slate-50">
-        
-        <!-- 좌측 사이드 공정 선택 네비게이션 바 -->
-        <aside class="w-[280px] bg-white border-r border-slate-200 flex flex-col justify-between p-4 z-10">
-            <div class="space-y-1">
-                <div class="text-[11px] font-black tracking-widest text-slate-400 uppercase px-2.5 mb-2 flex justify-between">
-                    <span>SOP INDEX LIST</span>
-                    <span>10대 표준 공정</span>
-                </div>
-                <div class="space-y-1 overflow-y-auto max-h-[440px] custom-scrollbar pr-1" id="aside-menu">
-                    <!-- Javascript가 메뉴를 동적 바인딩합니다 -->
-                </div>
-            </div>
-            
-            <!-- 단축키 가이드 및 편집모드 힌트 -->
-            <div class="space-y-2">
-                <div id="edit-hint-box" class="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-[10px] text-indigo-700 leading-normal hidden">
-                    <div class="font-bold mb-1"><i class="fa-solid fa-circle-info"></i> 편집 안내</div>
-                    텍스트를 직접 클릭해 수정하세요. 빈 곳을 클릭하면 변경사항이 즉시 저장됩니다. 완료 후 상단 <strong class="font-bold">SOP 파일 저장</strong>을 누르면 무사히 저장됩니다.
-                </div>
-                <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-[10.5px] text-slate-500 leading-relaxed">
-                    <div class="flex items-center gap-1.5 font-bold text-slate-800 mb-1">
-                        <i class="fa-solid fa-keyboard text-indigo-500"></i> 단축키 안내
-                    </div>
-                    키보드 <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded shadow-sm text-[9.5px]">←</kbd> / 
-                    <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded shadow-sm text-[9.5px]">→</kbd> 
-                    방향키로 장표를 넘길 수 있습니다.
-                </div>
-            </div>
-        </aside>
+<!-- 로그인/접근 모달 -->
+<div id="auth-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+    <div class="bg-white rounded-2xl shadow-2xl w-[400px] p-8">
 
-        <!-- 우측 메인 슬라이드 본문 -->
-        <main class="flex-grow p-10 flex flex-col justify-between overflow-hidden" id="sop-slide-canvas">
-            <!-- Javascript에 의해 활성 SOP 데이터가 렌더링되는 핵심 캔버스 영역입니다 -->
-        </main>
-        
+        <!-- 로고 -->
+        <div class="text-center mb-7">
+            <div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <i class="fa-solid fa-industry text-white text-2xl"></i>
+            </div>
+            <h2 class="text-xl font-black text-slate-900">런드리고 SOP</h2>
+            <p class="text-xs text-slate-400 mt-1">회사 Google 계정으로 로그인하세요</p>
+        </div>
+
+        <!-- 로그인 화면 -->
+        <div id="screen-login">
+            <button id="google-login-btn" onclick="doGoogleLogin()"
+                class="w-full flex items-center justify-center gap-3 border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700 font-bold py-3.5 rounded-xl transition text-sm shadow-sm">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-4 h-4">
+                Google 계정으로 로그인
+            </button>
+            <p class="text-center text-[11px] text-slate-400 mt-5 leading-relaxed">
+                로그인 후 접근 권한이 자동 확인됩니다.<br>
+                접근이 거부되면 관리자에게 권한을 요청하세요.
+            </p>
+        </div>
+
+        <!-- 접근 거부 화면 -->
+        <div id="screen-denied" class="hidden text-center">
+            <div class="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <i class="fa-solid fa-ban text-rose-500 text-xl"></i>
+            </div>
+            <h3 class="font-black text-slate-800 mb-1">접근 권한 없음</h3>
+            <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                <span id="denied-email" class="font-bold text-slate-700"></span><br>
+                이 계정은 SOP 열람 권한이 없습니다.<br>
+                관리자에게 권한 요청을 보내세요.
+            </p>
+            <a href="mailto:ADMIN_EMAIL_HERE?subject=SOP 열람 권한 요청&body=안녕하세요. SOP 열람 권한을 요청합니다.%0A%0A이메일: "
+                class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition mb-3">
+                <i class="fa-solid fa-envelope mr-1"></i> 권한 요청 메일 보내기
+            </a>
+            <br>
+            <button onclick="doGoogleLogin()" class="text-xs text-slate-400 hover:text-slate-600 transition mt-1">
+                다른 계정으로 시도
+            </button>
+        </div>
+
     </div>
-
-    <!-- 3. 글로벌 하단 상태 바 -->
-    <footer class="bg-white border-t border-slate-200 px-10 py-3 flex justify-between items-center text-[11px] text-slate-400 z-10">
-        <div class="flex items-center gap-5">
-            <span class="font-bold text-slate-600" id="footer-doc-no">문서번호: LOADING...</span>
-            <span class="w-1 h-1 rounded-full bg-slate-300"></span>
-            <span id="footer-version">버전: LOADING...</span>
-            <span class="w-1 h-1 rounded-full bg-slate-300"></span>
-            <span id="footer-last-update">최종수정: LOADING...</span>
-        </div>
-        <div class="flex items-center gap-4">
-            <span class="font-montserrat font-bold text-slate-600" id="footer-progress">0 / 0</span>
-            <div class="flex items-center gap-1">
-                <button onclick="prevSOP()" class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
-                    <i class="fa-solid fa-chevron-left text-[10px]"></i>
-                </button>
-                <button onclick="nextSOP()" class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition">
-                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
-                </button>
-            </div>
-        </div>
-    </footer>
-
 </div>
 
-<!-- 안전한 시스템 알림 메시지 컴포넌트 (알림창 대신 사용) -->
-<div id="custom-toast" class="fixed bottom-6 right-6 bg-slate-900 text-white text-xs px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-2.5 transform translate-y-20 opacity-0 transition-all duration-300 z-50 pointer-events-none">
-    <i class="fa-solid fa-circle-info text-indigo-400 text-sm"></i>
-    <span id="toast-message" class="font-medium">공정이 성공적으로 보정되었습니다.</span>
-</div>
 
 <!-- SOP RAW DATA STORAGE & CONTROLLER -->
 <script>
     // 복사 복원 시 안전한 교체를 위한 마커 설정
     /* START_SOP_DATA */
-    const sopData = [
+    window._sopDataInternal = [
         {
             sopCode: "SOP-01",
             docNo: "LG-SOP-01",
@@ -493,6 +674,8 @@
     ];
     /* END_SOP_DATA */
 
+    // sopData를 window에서 참조 (Firebase 연동)
+    const getSopData = () => window.sopData;
     let currentSopIndex = 0;
     let isEditMode = false; // 실시간 편집 모드 상태 관리
 
@@ -544,6 +727,7 @@
 
     // 데이터 실시간 업데이트 컨트롤러
     function updateSOPField(field, value) {
+        const sopData = window.sopData || [];
         sopData[currentSopIndex][field] = value.trim();
         if (field === 'title') {
             renderAsideMenu(); // 사이드바 제목도 연계하여 즉시 갱신
@@ -551,28 +735,34 @@
     }
 
     function updateSOPStep(stepIndex, key, value) {
+        const sopData = window.sopData || [];
         sopData[currentSopIndex].steps[stepIndex][key] = value.trim();
     }
 
     function updateSOPTableTitle(value) {
+        const sopData = window.sopData || [];
         sopData[currentSopIndex].referenceTable.title = value.trim();
     }
 
     function updateSOPTableHeader(index, value) {
+        const sopData = window.sopData || [];
         sopData[currentSopIndex].referenceTable.headers[index] = value.trim();
     }
 
     function updateSOPTableCell(rowIndex, colIndex, value) {
+        const sopData = window.sopData || [];
         sopData[currentSopIndex].referenceTable.rows[rowIndex][colIndex] = value.trim();
     }
 
     function updateSOPAttention(index, value) {
+        const sopData = window.sopData || [];
         sopData[currentSopIndex].attention[index].text = value.trim();
     }
 
     // 편집모드 토글 스위치
     function toggleEditMode() {
         isEditMode = !isEditMode;
+        window._isEditing = isEditMode; // 편집 중일 때 realtime 업데이트 차단
         const btn = document.getElementById("edit-mode-btn");
         const btnText = document.getElementById("edit-mode-text");
         const downloadBtn = document.getElementById("download-btn");
@@ -628,10 +818,10 @@
     }
 
     // Aside 메뉴 바인딩 함수
-    function renderAsideMenu() {
+    window.renderAsideMenu = function renderAsideMenu() {
         const menuContainer = document.getElementById("aside-menu");
         menuContainer.innerHTML = "";
-        
+        const sopData = window.sopData || [];
         sopData.forEach((sop, index) => {
             const isActive = index === currentSopIndex;
             const activeClass = isActive 
@@ -660,7 +850,8 @@
     }
 
     // 메인 슬라이드 렌더링 엔진
-    function renderActiveSlide() {
+    window.renderActiveSlide = function renderActiveSlide() {
+        const sopData = window.sopData || [];
         const sop = sopData[currentSopIndex];
         const canvas = document.getElementById("sop-slide-canvas");
         
@@ -793,11 +984,12 @@
         document.getElementById("footer-doc-no").innerText = `문서번호: ${sop.docNo}`;
         document.getElementById("footer-version").innerText = `버전: ${sop.version}`;
         document.getElementById("footer-last-update").innerText = `최종수정: ${sop.lastUpdate}`;
-        document.getElementById("footer-progress").innerText = `${currentSopIndex + 1} / ${sopData.length}`;
+        document.getElementById("footer-progress").innerText = `${currentSopIndex + 1} / ${(window.sopData || []).length}`;
     }
 
     // SOP 선택 함수
-    function selectSOP(index) {
+    window.selectSOP = function selectSOP(index) {
+        const sopData = window.sopData || [];
         if (index < 0 || index >= sopData.length) return;
         currentSopIndex = index;
         renderAsideMenu();
@@ -832,8 +1024,9 @@
 
     // 화면 첫 로딩 및 크기 변경 감지 이벤트 바인딩
     window.onload = function() {
-        selectSOP(0);
         adjustWindowScale();
+        // Firebase 로그인 후 데이터 로드되면 자동 렌더링됨
+        // 비로그인 상태에서는 로그인 모달이 표시됨
     };
 
     window.addEventListener('resize', adjustWindowScale);
