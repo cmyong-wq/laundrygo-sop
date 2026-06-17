@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>런드리고 세탁팩토리 SOP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans KR', 'sans-serif'],
+                        montserrat: ['Montserrat', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Noto Sans KR', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+        [contenteditable]:focus { outline: 2px solid #6366f1; outline-offset: 1px; border-radius: 4px; background: #f8fafc; }
+        .team-color-0 { background: #4f46e5; }
+        .team-color-1 { background: #0d9488; }
+        .team-color-2 { background: #b45309; }
+        .team-color-3 { background: #be123c; }
+        .team-border-0 { border-left: 3px solid #4f46e5; }
+        .team-border-1 { border-left: 3px solid #0d9488; }
+        .team-border-2 { border-left: 3px solid #b45309; }
+        .team-border-3 { border-left: 3px solid #be123c; }
+        .team-text-0 { color: #4f46e5; }
+        .team-text-1 { color: #0d9488; }
+        .team-text-2 { color: #b45309; }
+        .team-text-3 { color: #be123c; }
+        .team-bg-0 { background: #eef2ff; }
+        .team-bg-1 { background: #f0fdfa; }
+        .team-bg-2 { background: #fef3c7; }
+        .team-bg-3 { background: #fff1f2; }
+        .sop-item:hover { background: #f8fafc; }
+        .sop-item.active { background: #eef2ff; }
+        .step-num { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+        .edit-highlight { transition: background 0.15s; }
+        .btn-ghost { background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: #64748b; transition: all 0.15s; }
+        .btn-ghost:hover { background: #f1f5f9; border-color: #cbd5e1; color: #374151; }
+        .btn-danger { background: transparent; border: 1px solid #fecaca; border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: #ef4444; transition: all 0.15s; }
+        .btn-danger:hover { background: #fee2e2; }
+        .btn-primary { background: #4f46e5; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; color: white; font-weight: 600; transition: all 0.15s; }
+        .btn-primary:hover { background: #4338ca; }
+        input[type="text"] { border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: 'Noto Sans KR', sans-serif; width: 100%; outline: none; }
+        input[type="text"]:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-box { background: white; border-radius: 12px; padding: 24px; width: 340px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+        .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; z-index: 9999; transform: translateY(60px); opacity: 0; transition: all 0.3s; pointer-events: none; }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .wrapper { width: 1280px; height: 720px; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.15); }
+        @media (max-width: 1300px) {
+            .wrapper { width: 100vw; height: 100vh; border-radius: 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center" style="-webkit-font-smoothing:antialiased;">
+
+<div class="wrapper" id="main-wrapper">
+
+    <!-- HEADER -->
+    <header class="bg-slate-900 px-8 py-3 flex justify-between items-center z-20 border-b border-slate-800 flex-shrink-0">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-industry text-indigo-400 text-base"></i>
+            <span class="text-white font-montserrat font-extrabold text-sm tracking-wider">LAUNDRY FACTORY SOP</span>
+        </div>
+        <div class="flex items-center gap-3" id="header-right">
+            <button id="edit-mode-btn" onclick="toggleEditMode()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-pen-to-square"></i>
+                <span id="edit-mode-text">편집 모드 활성화</span>
+            </button>
+            <button id="save-btn" onclick="window._saveToFirestore && window._saveToFirestore()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg items-center gap-1.5 transition hidden">
+                <i class="fa-solid fa-cloud-arrow-up"></i> 전체 저장
+            </button>
+            <span class="w-px h-4 bg-slate-700"></span>
+            <span class="text-xs text-slate-400 font-montserrat">RUN: 2026.06</span>
+            <span class="w-1 h-1 rounded-full bg-slate-600"></span>
+            <span class="text-xs font-bold text-indigo-400">런드리고 세탁팩토리</span>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <div class="flex flex-grow overflow-hidden">
+
+        <!-- SIDEBAR -->
+        <aside class="w-56 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-400 tracking-wider uppercase">팀 / 공정</span>
+                <button id="add-team-btn" onclick="addTeam()" class="hidden btn-ghost text-indigo-600 border-indigo-200 hover:bg-indigo-50" title="팀 추가">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+            <div class="flex-grow overflow-y-auto custom-scrollbar" id="sidebar">
+                <!-- 동적 생성 -->
+            </div>
+        </aside>
+
+        <!-- CONTENT -->
+        <main class="flex-grow overflow-y-auto custom-scrollbar bg-slate-50" id="content-area">
+            <div class="flex items-center justify-center h-full">
+                <div class="text-center text-slate-400">
+                    <i class="fa-solid fa-arrow-left text-3xl mb-3 opacity-30"></i>
+                    <p class="text-sm">왼쪽에서 SOP를 선택하세요</p>
+                </div>
+            </div>
+        </main>
+
+    </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// 초기 데이터
+// ═══════════════════════════════════════════════
+window.sopData = [
+    {
+        id: "team-1",
+        teamName: "입고팀",
+        colorIndex: 0,
+        sops: [
+            {
+                id: "sop-1-1",
+                sopCode: "SOP-01",
+                title: "분류 / 진단 공정",
+                objective: "입고된 의류의 상태를 정확히 진단하여 적합한 공정(전처리/일반세탁)으로 분류한다.",
+                steps: [
+                    { title: "의류 입고 확인", desc: "고객 태그·품목·수량 일치 여부 체크" },
+                    { title: "소재 확인", desc: "소재 라벨 확인 (드라이/웨트/특수 구분)" },
+                    { title: "얼룩 유무 육안 확인", desc: "밝은 조명 아래 앞·뒤·안감 전체 확인" },
+                    { title: "얼룩 발견 시 → 마킹", desc: "얼룩 위치에 클립/스티커 표시 후 전처리 바구니 이동" },
+                    { title: "얼룩 없는 의류 → 분류", desc: "소재별 본세탁 바구니로 즉시 분류" },
+                    { title: "시스템 스캔 (본인 계정)", desc: "분류 완료 후 반드시 본인 계정으로 스캔 등록" },
+                ],
+                table: {
+                    title: "얼룩 판단 기준",
+                    headers: ["구분", "판단 기준", "이동 공정"],
+                    rows: [
+                        ["얼룩 없음", "육안 확인 이상 없음", "즉시 본세탁"],
+                        ["얼룩 있음 (소범위)", "지름 2cm 미만", "프리스파팅 → 본세탁"],
+                        ["얼룩 있음 (중범위)", "지름 2cm 이상", "전처리 → 본세탁"],
+                        ["변색 / 손상 의심", "탈색·구멍·올 풀림 등", "담당 팀장 보고 후 처리"],
+                    ]
+                },
+                attention: "소재 확인 없이 임의로 드라이/웨트 구분 금지. 모르면 반드시 팀장에게 확인."
+            }
+        ]
+    },
+    {
+        id: "team-2",
+        teamName: "세탁팀",
+        colorIndex: 1,
+        sops: [
+            {
+                id: "sop-2-1",
+                sopCode: "SOP-02",
+                title: "드라이 전처리 공정",
+                objective: "드라이클리닝 투입 전, 목·소매·주머니 및 얼룩 부위를 집중 전처리하여 세탁 효과를 극대화한다.",
+                steps: [
+                    { title: "작업 테이블에 의류 펼치기", desc: "안감·주요 오염 부위가 위로 오도록 배치" },
+                    { title: "D51 도포", desc: "목·소매·주머니 부위에 균일하게 도포" },
+                    { title: "솔로 전처리", desc: "원단 결 방향으로 부드럽게 문지름 (원형 금지)" },
+                    { title: "모직류 음식물 얼룩 처리", desc: "분무기로 물 소량 분사 → 솔 전처리 → 유화 작업" },
+                    { title: "유화 작업", desc: "약품이 섬유 깊이 침투하도록 30초 이상 대기" },
+                    { title: "드라이 본세탁 투입", desc: "전처리 완료 의류 드라이 망에 넣어 투입" },
+                    { title: "시스템 스캔 (본인 계정)", desc: "투입 전 반드시 본인 계정 스캔" },
+                ],
+                table: {
+                    title: "사용 약품",
+                    headers: ["약품명", "용도", "주의사항"],
+                    rows: [
+                        ["D51 (쇼프)", "목·소매·주머니 오염 분해", "직접 피부 접촉 금지"],
+                        ["분무기 (물)", "모직류 음식물 얼룩 습윤", "과다 분사 금지 (변형 주의)"],
+                    ]
+                },
+                attention: "모직·캐시미어는 과도한 솔질 시 필링(보풀) 발생. 가볍게 두드리듯 처리."
+            },
+            {
+                id: "sop-2-2",
+                sopCode: "SOP-03",
+                title: "프리스파팅 공정",
+                objective: "드라이클리닝 투입 전, 소범위 얼룩에 7종 약품을 직접 적용하여 본세탁 효과를 높인다.",
+                steps: [
+                    { title: "얼룩 종류 파악", desc: "냄새·색상·질감으로 얼룩 유형 추정" },
+                    { title: "적합 약품 선택", desc: "7종 약품 용도 기준으로 1차 약품 선택" },
+                    { title: "약품 소량 도포", desc: "면봉 또는 스팟건으로 얼룩 부위에만 도포" },
+                    { title: "30초~1분 반응 대기", desc: "약품 침투 시간 확보 (문지르지 말 것)" },
+                    { title: "완전 건조 확인", desc: "약품 잔류 여부 확인 후 건조 완료 시 다음 단계 진행" },
+                    { title: "드라이 본세탁 투입", desc: "건조 완료된 의류 드라이 망에 넣어 투입" },
+                    { title: "시스템 스캔 (본인 계정)", desc: "투입 전 반드시 본인 계정 스캔" },
+                ],
+                table: {
+                    title: "7종 약품 용도 구분",
+                    headers: ["약품", "주요 적용 얼룩", "비고"],
+                    rows: [
+                        ["단백질 분해제", "혈액·달걀·땀 등 단백질성", "냉수 사용"],
+                        ["지방 분해제", "식용유·버터·기름기", "온수 효과 좋음"],
+                        ["산성 계열", "커피·차·과일즙", "알칼리 중화 후 사용"],
+                        ["알칼리 계열", "잉크·볼펜·먹", "산성 중화 후 사용"],
+                        ["산화제 (표백)", "황변·곰팡이", "소재 확인 필수"],
+                        ["환원제", "염료 얼룩·립스틱", "산화 후 처리"],
+                        ["범용 스팟제", "복합·불명확 얼룩", "기본 1차 사용"],
+                    ]
+                },
+                attention: "절대 금지: 완전 건조 전 드라이 투입 → 약품 반응으로 원단 손상 위험"
+            },
+            {
+                id: "sop-2-3",
+                sopCode: "SOP-04",
+                title: "웨트 전처리 공정",
+                objective: "물세탁 투입 전, 런드리고 전처리제 및 7종 약품으로 얼룩을 처리하여 본세탁 효율을 높인다.",
+                steps: [
+                    { title: "얼룩 유형 확인", desc: "소재·얼룩 종류 파악" },
+                    { title: "런드리고 전처리제 도포", desc: "얼룩 부위 중심으로 균일 도포" },
+                    { title: "불림 대기 10분", desc: "타이머 사용 필수 — 10분 미만 투입 금지" },
+                    { title: "필요 시 7종 약품 추가 처리", desc: "전처리제 반응 후에도 잔존 시 해당 약품 추가 도포" },
+                    { title: "솔/손으로 가볍게 문지르기", desc: "원단 결 방향, 과도한 마찰 금지" },
+                    { title: "본세탁 투입", desc: "대기 완료 후 물세탁 기계 적합 코스 투입" },
+                    { title: "시스템 스캔 (본인 계정)", desc: "투입 전 반드시 본인 계정 스캔" },
+                ],
+                table: {
+                    title: "소재별 주의사항",
+                    headers: ["소재", "주의사항"],
+                    rows: [
+                        ["면·폴리에스터", "일반 처리 가능"],
+                        ["울·캐시미어", "전처리제 최소량, 불림 5분 이내"],
+                        ["실크·레이온", "약품 직접 도포 금지 → 팀장 확인"],
+                        ["방수 코팅 소재", "강한 약품 금지 (코팅 손상)"],
+                    ]
+                },
+                attention: "불림 대기 중 의류를 방치하지 말 것. 타이머 설정 후 다음 작업 진행."
+            }
+        ]
+    },
+    {
+        id: "team-3",
+        teamName: "피니쉬팀",
+        colorIndex: 2,
+        sops: [
+            {
+                id: "sop-3-1",
+                sopCode: "SOP-05",
+                title: "건조 공정",
+                objective: "세탁 완료 의류를 소재에 맞는 방식으로 건조하여 변형·수축을 방지한다.",
+                steps: [
+                    { title: "세탁 완료 의류 꺼내기", desc: "세탁 종료 즉시 꺼냄 (5분 이내)" },
+                    { title: "소재 라벨 재확인", desc: "건조 방법 결정" },
+                    { title: "기계 건조 / 자연건조 분류", desc: "소재별 기준에 따라 분리" },
+                    { title: "건조 완료 확인", desc: "완전 건조 여부 촉감으로 확인 (특히 솔기·두꺼운 부위)" },
+                    { title: "행어 또는 폴딩 처리", desc: "의류 형태 유지하며 정리" },
+                    { title: "시스템 스캔 (본인 계정)", desc: "건조 완료 후 본인 계정 스캔" },
+                ],
+                table: {
+                    title: "소재별 건조 방법",
+                    headers: ["소재", "건조 방법", "온도/주의"],
+                    rows: [
+                        ["면·폴리에스터", "기계 건조 가능", "중온 (60°C 이하)"],
+                        ["울·캐시미어", "평평하게 눕혀 자연건조", "기계 건조 절대 금지"],
+                        ["실크·레이온", "그늘 자연건조 (행어)", "직사광선 금지"],
+                        ["다운·패딩", "저온 기계 건조 + 중간 꺼내 털기", "뭉침 방지 필수"],
+                    ]
+                },
+                attention: "완전 건조 전 검증 공정 투입 금지 → 곰팡이·냄새 발생 원인"
+            },
+            {
+                id: "sop-3-2",
+                sopCode: "SOP-06",
+                title: "검증 공정",
+                objective: "건조 완료 의류의 세탁 결과를 최종 확인하여 적합/부적합을 판정한다.",
+                steps: [
+                    { title: "의류 펼쳐 전체 육안 확인", desc: "밝은 조명 아래 앞·뒤·안감·솔기 전체 확인" },
+                    { title: "얼룩 잔존 여부 확인", desc: "전처리 마킹 위치 중점 확인" },
+                    { title: "손상 여부 확인", desc: "탈색·수축·변형·올 풀림 등" },
+                    { title: "적합 판정 → 출하 처리", desc: "이상 없을 경우 완료 스캔 후 포장 준비" },
+                    { title: "부적합 발견 → 부적합 스캔", desc: "본인 계정으로 부적합 등록 스캔" },
+                    { title: "재처리 인계", desc: "얼룩 범위 기록 후 스파팅/재세탁 담당자에게 인계" },
+                ],
+                table: {
+                    title: "적합 / 부적합 판정 기준",
+                    headers: ["판정", "기준", "조치"],
+                    rows: [
+                        ["적합", "얼룩 없음, 손상 없음, 형태 정상", "포장 → 출하"],
+                        ["부적합 (재처리)", "얼룩 잔존 (소·중범위)", "스파팅 또는 재세탁 인계"],
+                        ["부적합 (고객안내)", "완전 제거 불가 또는 손상 발생", "SOP-07 고객 안내 프로세스"],
+                    ]
+                },
+                attention: "부적합 누락 금지: 발견 즉시 스캔 등록 필수. 누락 시 VOC 발생 → 팀 점수 반영"
+            }
+        ]
+    },
+    {
+        id: "team-4",
+        teamName: "출고팀",
+        colorIndex: 3,
+        sops: [
+            {
+                id: "sop-4-1",
+                sopCode: "SOP-07",
+                title: "고객 안내 처리 공정",
+                objective: "완전 제거 불가 얼룩·손상 의류에 대해 고객에게 신속·정확하게 안내하여 신뢰를 유지한다.",
+                steps: [
+                    { title: "처리 불가 판단 즉시 작업 중단", desc: "추가 처리 금지 — 상태 보존이 최우선" },
+                    { title: "의류 상태 기록", desc: "현재 상태 사진 촬영 + 얼룩 위치·크기 메모" },
+                    { title: "시스템에 고객 안내 요청 등록", desc: "안내 유형 선택 (지연/손상/작업중단) + 메모 입력" },
+                    { title: "시스템 자동 고객 컴 발송 확인", desc: "발송 완료 여부 시스템에서 확인" },
+                    { title: "의류 분리 보관", desc: "안내 완료 의류는 별도 구역 보관 (혼입 금지)" },
+                    { title: "팀장 최종 보고", desc: "안내 내용·의류 상태 팀장에게 구두 보고" },
+                ],
+                table: {
+                    title: "고객 안내 발생 조건",
+                    headers: ["상황", "안내 유형", "처리 기준"],
+                    rows: [
+                        ["처리 시간 30분 초과 예상", "지연 안내", "예상 완료일 명시"],
+                        ["얼룩 완전 제거 불가", "작업 결과 안내", "현재 상태 설명"],
+                        ["원단 손상 발생", "손상 우려 안내 + 작업 중단", "작업 중단 사유 설명"],
+                    ]
+                },
+                attention: "고객 안내 없이 손상·미제거 의류 출하 절대 금지. 반드시 안내 후 고객 확인."
+            }
+        ]
+    }
+];
+
+// ═══════════════════════════════════════════════
+// 상태
+// ═══════════════════════════════════════════════
+let isEditMode = false;
+let activeTeamId = null;
+let activeSopId = null;
+window._isEditor = false;
+window._isEditing = false;
+
+// ═══════════════════════════════════════════════
+// 유틸
+// ═══════════════════════════════════════════════
+function uid() { return 'id-' + Math.random().toString(36).substr(2, 9); }
+
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.innerText = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+}
+window.showCustomToast = showToast;
+
+function getTeam(teamId) { return window.sopData.find(t => t.id === teamId); }
+function getSop(teamId, sopId) {
+    const team = getTeam(teamId);
+    return team ? team.sops.find(s => s.id === sopId) : null;
+}
+
+// ═══════════════════════════════════════════════
+// 사이드바 렌더
+// ═══════════════════════════════════════════════
+function renderSidebar() {
+    const sb = document.getElementById('sidebar');
+    sb.innerHTML = '';
+    window.sopData.forEach(team => {
+        const isOpen = team.id === activeTeamId;
+        const teamEl = document.createElement('div');
+        teamEl.className = 'team-block';
+        teamEl.innerHTML = `
+            <div class="team-header flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-slate-50 border-b border-slate-100 group"
+                 onclick="toggleTeam('${team.id}')">
+                <div class="flex items-center gap-2 min-w-0">
+                    <div class="w-2 h-2 rounded-full flex-shrink-0 team-color-${team.colorIndex}"></div>
+                    <span class="text-xs font-bold text-slate-700 truncate">${team.teamName}</span>
+                    <span class="text-[10px] text-slate-400 ml-1">${team.sops.length}</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    ${isEditMode ? `
+                    <button onclick="event.stopPropagation(); renameTeam('${team.id}')" class="opacity-0 group-hover:opacity-100 btn-ghost py-0.5 px-1.5" title="이름 변경">
+                        <i class="fa-solid fa-pen text-[10px]"></i>
+                    </button>
+                    <button onclick="event.stopPropagation(); deleteTeam('${team.id}')" class="opacity-0 group-hover:opacity-100 btn-danger py-0.5 px-1.5" title="팀 삭제">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                    </button>` : ''}
+                    <i class="fa-solid fa-chevron-${isOpen ? 'down' : 'right'} text-slate-400 text-[10px] ml-1"></i>
+                </div>
+            </div>`;
+
+        // SOP 목록
+        if (isOpen) {
+            const sopList = document.createElement('div');
+            sopList.className = 'sop-list bg-slate-50';
+            team.sops.forEach(sop => {
+                const isActive = sop.id === activeSopId;
+                const item = document.createElement('div');
+                item.className = `sop-item flex items-center justify-between px-3 py-2 cursor-pointer border-b border-slate-100 group ${isActive ? 'active team-border-' + team.colorIndex : ''}`;
+                item.onclick = () => selectSop(team.id, sop.id);
+                item.innerHTML = `
+                    <div class="min-w-0 flex-1">
+                        <div class="text-[10px] team-text-${team.colorIndex} font-bold">${sop.sopCode}</div>
+                        <div class="text-xs text-slate-700 truncate">${sop.title}</div>
+                    </div>
+                    ${isEditMode ? `
+                    <button onclick="event.stopPropagation(); deleteSop('${team.id}','${sop.id}')" class="opacity-0 group-hover:opacity-100 btn-danger py-0.5 px-1.5 ml-1 flex-shrink-0" title="삭제">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                    </button>` : ''}`;
+                sopList.appendChild(item);
+            });
+
+            // SOP 추가 버튼 (편집 모드)
+            if (isEditMode) {
+                const addBtn = document.createElement('div');
+                addBtn.className = 'px-3 py-2 flex items-center gap-1.5 cursor-pointer hover:bg-slate-100 text-indigo-500 border-b border-slate-100';
+                addBtn.onclick = () => addSop(team.id);
+                addBtn.innerHTML = `<i class="fa-solid fa-plus text-[10px]"></i><span class="text-xs font-semibold">SOP 추가</span>`;
+                sopList.appendChild(addBtn);
+            }
+
+            teamEl.appendChild(sopList);
+        }
+        sb.appendChild(teamEl);
+    });
+}
+
+// ═══════════════════════════════════════════════
+// 콘텐츠 렌더
+// ═══════════════════════════════════════════════
+function renderContent() {
+    const area = document.getElementById('content-area');
+    if (!activeTeamId || !activeSopId) {
+        area.innerHTML = `<div class="flex items-center justify-center h-full text-slate-400 text-center">
+            <div><i class="fa-solid fa-arrow-left text-3xl mb-3 opacity-30"></i><p class="text-sm">왼쪽에서 SOP를 선택하세요</p></div>
+        </div>`;
+        return;
+    }
+    const team = getTeam(activeTeamId);
+    const sop = getSop(activeTeamId, activeSopId);
+    if (!team || !sop) return;
+
+    const c = team.colorIndex;
+    const edit = isEditMode && window._isEditor;
+    const editAttr = edit ? 'contenteditable="true" class="edit-highlight rounded px-0.5"' : '';
+
+    // 스텝 HTML
+    const stepsHTML = sop.steps.map((s, i) => `
+        <div class="flex items-start gap-3 p-2.5 rounded-lg ${i % 2 === 0 ? 'bg-slate-50' : 'bg-white'} border border-slate-100 group">
+            <div class="step-num team-color-${c} mt-0.5">${i + 1}</div>
+            <div class="flex-1 min-w-0">
+                <div class="text-xs font-bold text-slate-800" ${edit ? `contenteditable="true" data-field="step-title" data-team="${activeTeamId}" data-sop="${activeSopId}" data-idx="${i}" onblur="saveField(this,'step-title','${activeTeamId}','${activeSopId}',${i})"` : ''}>${s.title}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5" ${edit ? `contenteditable="true" data-field="step-desc" onblur="saveField(this,'step-desc','${activeTeamId}','${activeSopId}',${i})"` : ''}>${s.desc}</div>
+            </div>
+            ${edit ? `<button onclick="deleteStep('${activeTeamId}','${activeSopId}',${i})" class="opacity-0 group-hover:opacity-100 btn-danger py-0.5 px-1.5 flex-shrink-0 mt-0.5"><i class="fa-solid fa-trash text-[10px]"></i></button>` : ''}
+        </div>`).join('');
+
+    // 테이블 HTML
+    const tblHeadersHTML = sop.table.headers.map((h, i) => `
+        <th class="px-3 py-2 text-left text-[11px] font-bold text-white" ${edit ? `contenteditable="true" onblur="saveTableHeader(this,'${activeTeamId}','${activeSopId}',${i})"` : ''}>${h}</th>`).join('');
+
+    const tblRowsHTML = sop.table.rows.map((row, ri) => `
+        <tr class="${ri % 2 === 0 ? 'bg-white' : 'bg-slate-50'} group">
+            ${row.map((cell, ci) => `
+            <td class="px-3 py-2 text-[11px] text-slate-700 border-b border-slate-100" ${edit ? `contenteditable="true" onblur="saveTableCell(this,'${activeTeamId}','${activeSopId}',${ri},${ci})"` : ''}>${cell}</td>`).join('')}
+            ${edit ? `<td class="px-2 py-1 border-b border-slate-100"><button onclick="deleteTableRow('${activeTeamId}','${activeSopId}',${ri})" class="opacity-0 group-hover:opacity-100 btn-danger py-0.5 px-1.5"><i class="fa-solid fa-trash text-[9px]"></i></button></td>` : ''}
+        </tr>`).join('');
+
+    area.innerHTML = `
+        <div class="p-6 max-w-3xl mx-auto">
+
+            <!-- 헤더 -->
+            <div class="team-color-${c} rounded-xl px-6 py-4 mb-5 flex items-center justify-between">
+                <div>
+                    <div class="text-white/70 text-[11px] font-bold tracking-wider mb-1">${team.teamName} · <span ${edit ? `contenteditable="true" class="edit-highlight rounded" onblur="saveField(this,'sopCode','${activeTeamId}','${activeSopId}',-1)"` : ''}>${sop.sopCode}</span></div>
+                    <div class="text-white text-xl font-black" ${edit ? `contenteditable="true" onblur="saveField(this,'title','${activeTeamId}','${activeSopId}',-1)"` : ''}>${sop.title}</div>
+                </div>
+                ${edit ? `<div class="flex gap-2">
+                    <button onclick="addStep('${activeTeamId}','${activeSopId}')" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition">
+                        <i class="fa-solid fa-plus mr-1"></i>단계 추가
+                    </button>
+                </div>` : ''}
+            </div>
+
+            <!-- 목적 -->
+            <div class="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+                <div class="text-xs font-bold team-text-${c} mb-1.5">▶ 목적</div>
+                <div class="text-xs text-slate-600 leading-relaxed" ${edit ? `contenteditable="true" onblur="saveField(this,'objective','${activeTeamId}','${activeSopId}',-1)"` : ''}>${sop.objective}</div>
+            </div>
+
+            <!-- 작업 단계 -->
+            <div class="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+                <div class="text-xs font-bold team-text-${c} mb-3">▶ 작업 단계</div>
+                <div class="flex flex-col gap-2" id="steps-list">${stepsHTML}</div>
+            </div>
+
+            <!-- 기준 테이블 -->
+            <div class="bg-white rounded-xl border border-slate-200 p-4 mb-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="text-xs font-bold team-text-${c}" ${edit ? `contenteditable="true" onblur="saveField(this,'tableTitle','${activeTeamId}','${activeSopId}',-1)"` : ''}>▶ ${sop.table.title}</div>
+                    ${edit ? `<div class="flex gap-2">
+                        <button onclick="addTableCol('${activeTeamId}','${activeSopId}')" class="btn-ghost"><i class="fa-solid fa-plus mr-1 text-[10px]"></i>열 추가</button>
+                        <button onclick="addTableRow('${activeTeamId}','${activeSopId}')" class="btn-ghost"><i class="fa-solid fa-plus mr-1 text-[10px]"></i>행 추가</button>
+                    </div>` : ''}
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left border-collapse">
+                        <thead><tr class="team-color-${c}">${tblHeadersHTML}${edit ? '<th class="w-8"></th>' : ''}</tr></thead>
+                        <tbody>${tblRowsHTML}</tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 주의사항 -->
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <div class="flex items-start gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 flex-shrink-0"></i>
+                    <div class="text-xs text-amber-800 leading-relaxed" ${edit ? `contenteditable="true" onblur="saveField(this,'attention','${activeTeamId}','${activeSopId}',-1)"` : ''}>${sop.attention}</div>
+                </div>
+            </div>
+
+        </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// 액션
+// ═══════════════════════════════════════════════
+function toggleTeam(teamId) {
+    if (activeTeamId === teamId) {
+        activeTeamId = null;
+        activeSopId = null;
+    } else {
+        activeTeamId = teamId;
+        activeSopId = null;
+    }
+    renderSidebar();
+    renderContent();
+}
+
+function selectSop(teamId, sopId) {
+    activeTeamId = teamId;
+    activeSopId = sopId;
+    renderSidebar();
+    renderContent();
+}
+
+function toggleEditMode() {
+    if (!window._isEditor) {
+        showToast('⛔ 편집 권한이 없습니다.');
+        return;
+    }
+    isEditMode = !isEditMode;
+    window._isEditing = isEditMode;
+    document.getElementById('edit-mode-text').innerText = isEditMode ? '편집 모드 종료' : '편집 모드 활성화';
+    document.getElementById('edit-mode-btn').className = isEditMode
+        ? 'bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition'
+        : 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition';
+    const saveBtn = document.getElementById('save-btn');
+    saveBtn.classList.toggle('hidden', !isEditMode);
+    saveBtn.classList.toggle('flex', isEditMode);
+    document.getElementById('add-team-btn').classList.toggle('hidden', !isEditMode);
+    renderSidebar();
+    renderContent();
+}
+
+// ── 팀 추가/삭제/이름변경 ──────────────────────
+function addTeam() {
+    showModal('새 팀 이름을 입력하세요', '', (name) => {
+        if (!name.trim()) return;
+        const colors = [0,1,2,3];
+        const usedColors = window.sopData.map(t => t.colorIndex);
+        const freeColor = colors.find(c => !usedColors.includes(c)) ?? window.sopData.length % 4;
+        window.sopData.push({ id: uid(), teamName: name.trim(), colorIndex: freeColor, sops: [] });
+        renderSidebar();
+        showToast('✅ 팀이 추가되었습니다.');
+    });
+}
+
+function renameTeam(teamId) {
+    const team = getTeam(teamId);
+    showModal('팀 이름 변경', team.teamName, (name) => {
+        if (!name.trim()) return;
+        team.teamName = name.trim();
+        renderSidebar();
+        showToast('✅ 팀 이름이 변경되었습니다.');
+    });
+}
+
+function deleteTeam(teamId) {
+    const team = getTeam(teamId);
+    if (!confirm(`"${team.teamName}" 팀과 모든 SOP를 삭제하시겠습니까?`)) return;
+    window.sopData = window.sopData.filter(t => t.id !== teamId);
+    if (activeTeamId === teamId) { activeTeamId = null; activeSopId = null; }
+    renderSidebar();
+    renderContent();
+    showToast('🗑 팀이 삭제되었습니다.');
+}
+
+// ── SOP 추가/삭제 ──────────────────────────────
+function addSop(teamId) {
+    showModal('새 SOP 제목을 입력하세요', '', (title) => {
+        if (!title.trim()) return;
+        const team = getTeam(teamId);
+        const num = team.sops.length + 1;
+        const newSop = {
+            id: uid(),
+            sopCode: `SOP-NEW`,
+            title: title.trim(),
+            objective: '목적을 입력하세요.',
+            steps: [{ title: '작업 단계 1', desc: '설명을 입력하세요.' }],
+            table: { title: '기준표', headers: ['구분', '내용'], rows: [['항목 1', '내용 1']] },
+            attention: '주의사항을 입력하세요.'
+        };
+        team.sops.push(newSop);
+        activeSopId = newSop.id;
+        renderSidebar();
+        renderContent();
+        showToast('✅ SOP가 추가되었습니다.');
+    });
+}
+
+function deleteSop(teamId, sopId) {
+    const sop = getSop(teamId, sopId);
+    if (!confirm(`"${sop.title}" SOP를 삭제하시겠습니까?`)) return;
+    const team = getTeam(teamId);
+    team.sops = team.sops.filter(s => s.id !== sopId);
+    if (activeSopId === sopId) activeSopId = null;
+    renderSidebar();
+    renderContent();
+    showToast('🗑 SOP가 삭제되었습니다.');
+}
+
+// ── 필드 저장 ──────────────────────────────────
+function saveField(el, field, teamId, sopId, idx) {
+    const sop = getSop(teamId, sopId);
+    const val = el.innerText.trim();
+    if (field === 'title') sop.title = val;
+    else if (field === 'sopCode') sop.sopCode = val;
+    else if (field === 'objective') sop.objective = val;
+    else if (field === 'attention') sop.attention = val;
+    else if (field === 'tableTitle') sop.table.title = val;
+    else if (field === 'step-title') sop.steps[idx].title = val;
+    else if (field === 'step-desc') sop.steps[idx].desc = val;
+}
+
+function saveTableHeader(el, teamId, sopId, colIdx) {
+    const sop = getSop(teamId, sopId);
+    sop.table.headers[colIdx] = el.innerText.trim();
+}
+
+function saveTableCell(el, teamId, sopId, rowIdx, colIdx) {
+    const sop = getSop(teamId, sopId);
+    sop.table.rows[rowIdx][colIdx] = el.innerText.trim();
+}
+
+// ── 스텝 추가/삭제 ────────────────────────────
+function addStep(teamId, sopId) {
+    const sop = getSop(teamId, sopId);
+    sop.steps.push({ title: '새 작업 단계', desc: '설명을 입력하세요.' });
+    renderContent();
+    showToast('✅ 단계가 추가되었습니다.');
+}
+
+function deleteStep(teamId, sopId, idx) {
+    const sop = getSop(teamId, sopId);
+    sop.steps.splice(idx, 1);
+    renderContent();
+}
+
+// ── 테이블 행/열 추가/삭제 ───────────────────
+function addTableRow(teamId, sopId) {
+    const sop = getSop(teamId, sopId);
+    const cols = sop.table.headers.length;
+    sop.table.rows.push(Array(cols).fill('내용 입력'));
+    renderContent();
+}
+
+function addTableCol(teamId, sopId) {
+    const sop = getSop(teamId, sopId);
+    sop.table.headers.push('새 열');
+    sop.table.rows.forEach(row => row.push(''));
+    renderContent();
+}
+
+function deleteTableRow(teamId, sopId, rowIdx) {
+    const sop = getSop(teamId, sopId);
+    sop.table.rows.splice(rowIdx, 1);
+    renderContent();
+}
+
+// ── 모달 ──────────────────────────────────────
+function showModal(label, defaultVal, callback) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box">
+            <div class="text-sm font-bold text-slate-700 mb-3">${label}</div>
+            <input type="text" id="modal-input" value="${defaultVal}" class="w-full mb-4" placeholder="입력하세요">
+            <div class="flex gap-2 justify-end">
+                <button onclick="this.closest('.modal-overlay').remove()" class="btn-ghost px-4 py-2">취소</button>
+                <button id="modal-ok" class="btn-primary px-4 py-2">확인</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    const inp = overlay.querySelector('#modal-input');
+    inp.focus(); inp.select();
+    overlay.querySelector('#modal-ok').onclick = () => {
+        overlay.remove();
+        callback(inp.value);
+    };
+    inp.onkeydown = (e) => { if (e.key === 'Enter') { overlay.remove(); callback(inp.value); } };
+}
+
+// ── 화면 비율 자동 조정 ────────────────────────
+function adjustScale() {
+    const w = document.getElementById('main-wrapper');
+    if (!w) return;
+    const scaleX = window.innerWidth / 1280;
+    const scaleY = window.innerHeight / 720;
+    const scale = Math.min(scaleX, scaleY, 1);
+    w.style.transform = `scale(${scale})`;
+    w.style.transformOrigin = 'center center';
+}
+window.addEventListener('resize', adjustScale);
+
+// ── Firestore 저장 ──────────────────────────────
+window._saveToFirestore = async function() {
+    if (typeof saveSOPToFirestore === 'function') {
+        await saveSOPToFirestore();
+    } else {
+        showToast('저장 기능이 초기화되지 않았습니다.');
+    }
+};
+
+// ── 초기화 ────────────────────────────────────
+window.onload = function() {
+    adjustScale();
+    renderSidebar();
+    renderContent();
+};
+</script>
+
+<!-- Firebase 연동 -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, onSnapshot }
+        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+        from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDZviv3Nc1I4rL7VGhdEP9ozbupSu-R45I",
+        authDomain: "laundrygo-sop.firebaseapp.com",
+        projectId: "laundrygo-sop",
+        storageBucket: "laundrygo-sop.firebasestorage.app",
+        messagingSenderId: "244997131170",
+        appId: "1:244997131170:web:1f70864631e02b5b8dc0fb"
+    };
+
+    const EDITOR_EMAILS = [
+        "jykim@lifegoeson.kr",
+        "cmyong@lifegoeson.kr",
+        "bsyoon@lifegoeson.kr",
+        "mschoi@lifegoeson.kr",
+        "yjlim@lifegoeson.kr",
+    ];
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    // 로그인 모달
+    const modal = document.createElement('div');
+    modal.id = 'fb-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(13,33,55,0.85);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:16px;padding:36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;">
+            <div style="width:52px;height:52px;background:#4f46e5;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+                <i class="fa-solid fa-industry" style="color:white;font-size:22px;"></i>
+            </div>
+            <h2 style="font-size:18px;font-weight:900;color:#0f172a;margin:0 0 4px;">런드리고 SOP</h2>
+            <p style="font-size:12px;color:#94a3b8;margin:0 0 24px;">회사 Google 계정으로 로그인하세요</p>
+            <div id="fb-login-screen">
+                <button id="fb-google-btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px;font-size:13px;font-weight:700;color:#374151;cursor:pointer;background:#fff;font-family:'Noto Sans KR',sans-serif;">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:18px;height:18px;">
+                    Google 계정으로 로그인
+                </button>
+                <p style="font-size:11px;color:#94a3b8;margin-top:16px;line-height:1.7;">로그인 후 접근 권한이 자동 확인됩니다.<br>권한이 없으면 관리자에게 문의하세요.</p>
+            </div>
+            <div id="fb-denied-screen" style="display:none;">
+                <div style="width:48px;height:48px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+                    <i class="fa-solid fa-ban" style="color:#ef4444;font-size:20px;"></i>
+                </div>
+                <h3 style="font-weight:900;color:#0f172a;margin:0 0 8px;">접근 권한 없음</h3>
+                <p id="fb-denied-msg" style="font-size:12px;color:#6b7280;margin:0 0 16px;line-height:1.6;"></p>
+                <a id="fb-mail-link" href="#" style="display:inline-block;background:#4f46e5;color:#fff;font-size:12px;font-weight:700;padding:10px 20px;border-radius:10px;text-decoration:none;margin-bottom:10px;">권한 요청 메일 보내기</a><br>
+                <button onclick="doLogin()" style="font-size:11px;color:#9ca3af;background:none;border:none;cursor:pointer;margin-top:6px;">다른 계정으로 시도</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    // 헤더 뱃지
+    const badge = document.createElement('div');
+    badge.style.cssText = 'display:none;align-items:center;gap:8px;';
+    badge.innerHTML = `
+        <span id="fb-role" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#e0e7ff;color:#4f46e5;">👁 뷰어</span>
+        <img id="fb-avatar" src="" style="width:26px;height:26px;border-radius:50%;border:2px solid #4f46e5;">
+        <span id="fb-name" style="font-size:11px;color:#94a3b8;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+        <button onclick="doLogout()" style="font-size:13px;color:#64748b;background:none;border:none;cursor:pointer;" title="로그아웃"><i class="fa-solid fa-right-from-bracket"></i></button>`;
+    document.getElementById('header-right').prepend(badge);
+
+    async function checkAccess(email) {
+        if (EDITOR_EMAILS.includes(email)) return true;
+        try {
+            const snap = await getDoc(doc(db, 'access', 'viewers'));
+            return snap.exists() && (snap.data().emails || []).includes(email);
+        } catch { return false; }
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+            modal.style.display = 'flex';
+            document.getElementById('fb-login-screen').style.display = '';
+            document.getElementById('fb-denied-screen').style.display = 'none';
+            badge.style.display = 'none';
+            return;
+        }
+        const allowed = await checkAccess(user.email);
+        if (!allowed) {
+            await signOut(auth);
+            document.getElementById('fb-login-screen').style.display = 'none';
+            document.getElementById('fb-denied-screen').style.display = '';
+            document.getElementById('fb-denied-msg').innerText = user.email + ' 계정은 열람 권한이 없습니다.';
+            document.getElementById('fb-mail-link').href = `mailto:cmyong@lifegoeson.kr?subject=SOP 열람 권한 요청&body=이메일: ${user.email}`;
+            return;
+        }
+
+        modal.style.display = 'none';
+        badge.style.display = 'flex';
+        document.getElementById('fb-name').innerText = user.displayName || user.email;
+        document.getElementById('fb-avatar').src = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.email)}&background=4f46e5&color=fff`;
+
+        const isEditor = EDITOR_EMAILS.includes(user.email);
+        window._isEditor = isEditor;
+        if (isEditor) {
+            document.getElementById('fb-role').innerText = '✏️ 편집자';
+            document.getElementById('fb-role').style.background = '#e0e7ff';
+            document.getElementById('fb-role').style.color = '#4f46e5';
+        } else {
+            document.getElementById('edit-mode-btn').style.display = 'none';
+        }
+
+        // Firestore 로드
+        try {
+            const snap = await getDoc(doc(db, 'sop', 'main'));
+            if (snap.exists() && snap.data().sopData && Array.isArray(snap.data().sopData)) {
+                window.sopData = snap.data().sopData;
+                renderSidebar();
+                renderContent();
+                showCustomToast('✅ 최신 SOP 데이터를 불러왔습니다.');
+            } else {
+                await setDoc(doc(db, 'sop', 'main'), { sopData: window.sopData, updatedAt: new Date().toISOString(), updatedBy: 'init' });
+            }
+        } catch(e) {
+            console.error('Firestore 로드 오류:', e);
+        }
+
+        // 실시간 감지
+        onSnapshot(doc(db, 'sop', 'main'), (snap) => {
+            if (snap.exists() && snap.data().sopData && !window._isEditing) {
+                window.sopData = snap.data().sopData;
+                renderSidebar();
+                renderContent();
+            }
+        });
+    });
+
+    // Firestore 저장
+    window.saveSOPToFirestore = async function() {
+        try {
+            await setDoc(doc(db, 'sop', 'main'), {
+                sopData: window.sopData,
+                updatedAt: new Date().toISOString(),
+                updatedBy: auth.currentUser?.email || 'unknown'
+            });
+            showCustomToast('✅ 저장 완료! 모든 사용자에게 즉시 반영됩니다.');
+        } catch(e) {
+            showCustomToast('⚠️ 저장 실패: ' + e.message);
+        }
+    };
+
+    // 로그인/로그아웃
+    window.doLogin = async function() {
+        const btn = document.getElementById('fb-google-btn');
+        btn.disabled = true; btn.innerHTML = '⏳ 로그인 중...';
+        try { await signInWithPopup(auth, provider); }
+        catch(e) {
+            btn.disabled = false;
+            btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" style="width:18px;height:18px;"> Google 계정으로 로그인';
+        }
+    };
+    window.doLogout = async function() { await signOut(auth); };
+
+    document.getElementById('fb-google-btn').onclick = () => window.doLogin();
+</script>
+
+</body>
+</html>
