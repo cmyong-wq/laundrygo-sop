@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>런드리고 세탁팩토리 표준공정(SOP) 핸드북</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans KR', 'sans-serif'],
+                        montserrat: ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            navy: '#0f172a',
+                            indigo: '#4f46e5',
+                            teal: '#0d9488',
+                            rose: '#be123c',
+                            amber: '#b45309'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 슬라이드 크기 고정 및 비율 유지를 위한 스타일 */
+        .presentation-wrapper {
+            width: 1280px;
+            height: 720px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+            flex-shrink: 0;
+            transition: transform 0.15s ease-out;
+            /* will-change: transform 제거로 스케일링 시 폰트 래스터화(뿌옇게 변함) 현상 근본적 차단 */
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            transform-style: preserve-3d;
+        }
+        /* 커스텀 스크롤바 */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* 편집 모드 포커스 아웃라인 제거 및 효과 */
+        .editable-active-style:focus {
+            background-color: #f8fafc !important;
+            box-shadow: 0 0 0 2px #6366f1 !important;
+            border-color: #6366f1 !important;
+        }
+    </style>
+
+    <!-- Firebase SDK (Google 소셜 로그인) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDZviv3Nc1I4rL7VGhdEP9ozbupSu-R45I",
+            authDomain: "laundrygo-sop.firebaseapp.com",
+            projectId: "laundrygo-sop",
+            storageBucket: "laundrygo-sop.firebasestorage.app",
+            messagingSenderId: "244997131170",
+            appId: "1:244997131170:web:1f70864631e02b5b8dc0fb"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db  = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        window._db   = db;
+        window._auth = auth;
+
+        // ── 인증 상태 변화 감지 ──────────────────────────────
+        onAuthStateChanged(auth, async (user) => {
+            window._currentUser = user;
+
+            if (user) {
+                // 로그인 성공 → 뷰어 권한 확인
+                const allowed = await checkViewerAccess(user.email);
+                if (!allowed) {
+                    // 접근 권한 없음 → 안내 후 로그아웃
+                    showAuthScreen('denied', user.email);
+                    await signOut(auth);
+                    return;
+                }
+
+                // 편집자 여부 판별
+                const isEditor = (window._editorEmails || []).includes(user.email);
+                window._isEditor = isEditor;
+
+                // UI 업데이트
+                document.getElementById('auth-modal').classList.add('hidden');
+                document.getElementById('user-badge').classList.remove('hidden');
+                document.getElementById('user-email').innerText = user.displayName || user.email;
+                document.getElementById('user-avatar').src =
+                    user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.email)}&background=4f46e5&color=fff`;
+
+                if (isEditor) {
+                    document.getElementById('edit-mode-btn').classList.remove('hidden');
+                    document.getElementById('role-badge').innerText = '✏️ 편집자';
+                    document.getElementById('role-badge').className =
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700';
+                } else {
+                    document.getElementById('edit-mode-btn').classList.add('hidden');
+                    document.getElementById('role-badge').innerText = '👁 뷰어';
+                    document.getElementById('role-badge').className =
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500';
+                }
+
+                loadSOPFromFirestore();
+                listenSOPChanges();
+
+            } else {
+                showAuthScreen('login');
+                document.getElementById('user-badge').classList.add('hidden');
+            }
+        });
+
+        // ── 뷰어 접근 허용 여부 확인 (Firestore allowedEmails 컬렉션) ──
+        async function checkViewerAccess(email) {
+            // 편집자는 항상 통과
+            if ((window._editorEmails || []).includes(email)) return true;
+            try {
+                const ref = doc(db, 'access', 'viewers');
+                const snap = await getDoc(ref);
+                if (!snap.exists()) return false;
+                const list = snap.data().emails || [];
+                return list.includes(email);
+            } catch(e) {
+                console.error('접근 권한 확인 실패:', e);
+                return false;
+            }
+        }
+
+        // ── 화면 전환 ──────────────────────────────────────
+        function showAuthScreen(state, email = '') {
+            const modal = document.getElementById('auth-modal');
+            modal.classList.remove('hidden');
+            document.getElementById('screen-login').classList.add('hidden');
+            document.getElementById('screen-denied').classList.add('hidden');
+
+            if (state === 'login') {
+                document.getElementById('screen-login').classList.remove('hidden');
+            } else if (state === 'denied') {
+                document.getElementById('denied-email').innerText = email;
+                document.getElementById('screen-denied').classList.remove('hidden');
+            }
+        }
+
+        // ── 구글 로그인 ────────────────────────────────────
+        window.doGoogleLogin = async function() {
+            const btn = document.getElementById('google-login-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 로그인 중...';
+            try {
+                await signInWithPopup(auth, provider);
+            } catch(e) {
+                btn.disabled = false;
+                btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-4 h-4"> Google 계정으로 로그인';
+                if (e.code !== 'auth/popup-closed-by-user') {
+                    (window.showCustomToast || console.log)('로그인 오류: ' + e.message);
+                }
+            }
+        };
+
+        // ── 로그아웃 ───────────────────────────────────────
+        window.doLogout = async function() {
+            await signOut(auth);
+            (window.showCustomToast || console.log)('로그아웃되었습니다.');
+        };
+
+        // ── Firestore SOP 로드 ─────────────────────────────
+        window.loadSOPFromFirestore = async function() {
+            try {
+                const snap = await getDoc(doc(db, 'sop', 'main'));
+                if (snap.exists() && snap.data().sopData) {
+                    window.sopData = snap.data().sopData;
+                } else {
+                    // 첫 실행: 기본 데이터를 Firestore에 저장
+                    await setDoc(doc(db, 'sop', 'main'), {
+                        sopData: window.sopData,
+                        updatedAt: new Date().toISOString(),
+                        updatedBy: 'init'
+                    });
+                }
+            } catch(e) {
+                console.log('Firestore 로드 실패, 기본 데이터 사용:', e.message);
+            }
+            // 데이터 렌더링 (성공/실패 무관하게 항상 실행)
+            setTimeout(() => {
+                window.renderAsideMenu && window.renderAsideMenu();
+                window.renderActiveSlide && window.renderActiveSlide();
+                if (window.showCustomToast) window.showCustomToast('✅ SOP 로드 완료');
+            }, 300);
+        };
+
+        // ── Firestore SOP 저장 ─────────────────────────────
+        window.saveSOPToFirestore = async function() {
+            if (!window._isEditor) {
+                (window.showCustomToast || console.log)('⛔ 편집 권한이 없습니다.');
+                return;
+            }
+            try {
+                await setDoc(doc(db, 'sop', 'main'), {
+                    sopData: window.sopData,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: window._currentUser?.email || 'unknown'
+                });
+                (window.showCustomToast || console.log)('✅ 저장 완료! 모든 사용자에게 즉시 반영됩니다.');
+            } catch(e) {
+                (window.showCustomToast || console.log)('⚠️ 저장 실패: ' + e.message);
+            }
+        };
+
+        // ── 실시간 변경 감지 ───────────────────────────────
+        window.listenSOPChanges = function() {
+            onSnapshot(doc(db, 'sop', 'main'), (snap) => {
+                if (snap.exists() && snap.data().sopData && !window._isEditing) {
+                    window.sopData = snap.data().sopData;
+                    window.renderAsideMenu && window.renderAsideMenu();
+                    window.renderActiveSlide && window.renderActiveSlide();
+                }
+            });
+        };
+    </script>
+
+</head>
+
+<body class="bg-slate-100 min-h-screen w-screen flex flex-col justify-center items-center select-none font-sans overflow-hidden relative" style="-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;">
+<script>
+    window._editorEmails = [
+        "jykim@lifegoeson.kr",
+        "cmyong@lifegoeson.kr",
+        "bsyoon@lifegoeson.kr",
+        "mschoi@lifegoeson.kr",
+        "yjlim@lifegoeson.kr",
+    ];
+    window._isEditor = false;
+    window._isEditing = false;
+    window._currentUser = null;
+</script>
+
+<div class="presentation-wrapper bg-white rounded-2xl overflow-hidden flex flex-col relative border border-slate-200">
+    
+    <!-- 1. 상단 글로벌 네비게이션 헤더 -->
+    <header class="bg-brand-navy px-10 py-3 flex justify-between items-center z-20 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+            <span class="text-white font-montserrat font-extrabold text-sm tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-industry text-indigo-400 text-base"></i> LAUNDRY FACTORY SOP
+            </span>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- 편집모드 활성화 버튼 및 다운로드 버튼 -->
+            <button onclick="toggleEditMode()" id="edit-mode-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-pen-to-square"></i> <span id="edit-mode-text">편집 모드 활성화</span>
+            </button>
+            <button onclick="saveSOPToFirestore()" id="download-btn" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition hidden">
+                <i class="fa-solid fa-cloud-arrow-up"></i> 전체 저장 (공유 반영)
+            </button>
+            <span class="w-px h-4 bg-slate-700"></span>
+            <div class="flex items-center gap-3 text-xs text-slate-400">
+                <span class="font-montserrat">RUN: 2026.06</span>
+                <span class="w-1 h-1 rounded-full bg-slate-600"></span>
+                <span class="font-bold text-indigo-400">런드리고 세탁팩토리</span>
+            </div>
+
+            <!-- 유저 뱃지 (로그인 후 표시) -->
+            <div id="user-badge" class="hidden flex items-center gap-2.5">
+                <span id="role-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">👁 뷰어</span>
+                <img id="user-avatar" src="" class="w-6 h-6 rounded-full border border-slate-600">
+                <span id="user-email" class="text-[11px] text-slate-300 font-montserrat max-w-[140px] truncate"></span>
+                <button onclick="doLogout()" class="text-[10px] text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+<!-- 로그인/접근 모달 -->
+<div id="auth-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-[100]">
+    <div class="bg-white rounded-2xl shadow-2xl w-[400px] p-8">
+
+        <!-- 로고 -->
+        <div class="text-center mb-7">
+            <div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                <i class="fa-solid fa-industry text-white text-2xl"></i>
+            </div>
+            <h2 class="text-xl font-black text-slate-900">런드리고 SOP</h2>
+            <p class="text-xs text-slate-400 mt-1">회사 Google 계정으로 로그인하세요</p>
+        </div>
+
+        <!-- 로그인 화면 -->
+        <div id="screen-login">
+            <button id="google-login-btn" onclick="doGoogleLogin()"
+                class="w-full flex items-center justify-center gap-3 border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 text-slate-700 font-bold py-3.5 rounded-xl transition text-sm shadow-sm">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-4 h-4">
+                Google 계정으로 로그인
+            </button>
+            <p class="text-center text-[11px] text-slate-400 mt-5 leading-relaxed">
+                로그인 후 접근 권한이 자동 확인됩니다.<br>
+                접근이 거부되면 관리자에게 권한을 요청하세요.
+            </p>
+        </div>
+
+        <!-- 접근 거부 화면 -->
+        <div id="screen-denied" class="hidden text-center">
+            <div class="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <i class="fa-solid fa-ban text-rose-500 text-xl"></i>
+            </div>
+            <h3 class="font-black text-slate-800 mb-1">접근 권한 없음</h3>
+            <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                <span id="denied-email" class="font-bold text-slate-700"></span><br>
+                이 계정은 SOP 열람 권한이 없습니다.<br>
+                관리자에게 권한 요청을 보내세요.
+            </p>
+            <a href="mailto:ADMIN_EMAIL_HERE?subject=SOP 열람 권한 요청&body=안녕하세요. SOP 열람 권한을 요청합니다.%0A%0A이메일: "
+                class="inline-block bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition mb-3">
+                <i class="fa-solid fa-envelope mr-1"></i> 권한 요청 메일 보내기
+            </a>
+            <br>
+            <button onclick="doGoogleLogin()" class="text-xs text-slate-400 hover:text-slate-600 transition mt-1">
+                다른 계정으로 시도
+            </button>
+        </div>
+
+    </div>
+</div>
+
+
+<!-- SOP RAW DATA STORAGE & CONTROLLER -->
+<script>
+    // 복사 복원 시 안전한 교체를 위한 마커 설정
+    /* START_SOP_DATA */
+    window._sopDataInternal = [
+        {
+            sopCode: "SOP-01",
+            docNo: "LG-SOP-01",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "분류 / 진단 공정",
+            category: "입고 및 분류",
+            icon: "fa-magnifying-glass",
+            colorClass: "indigo",
+            objective: "입고된 의류의 상태를 정확히 진단하여 적합한 공정(전처리/일반세탁)으로 분류한다.",
+            steps: [
+                { num: 1, title: "의류 입고 확인", desc: "고객 태그·품목·수량 일치 여부 체크" },
+                { num: 2, title: "소재 확인", desc: "소재 라벨 확인 (드라이/웨트/특수 구분)" },
+                { num: 3, title: "얼룩 유무 육안 확인", desc: "밝은 조명 아래 앞·뒤·안감 전체 확인" },
+                { num: 4, title: "얼룩 발견 시 → 마킹", desc: "얼룩 위치에 클립/스티커로 표시 후 전처리 바구니 이동" },
+                { num: 5, title: "얼룩 없는 의류 → 분류", desc: "소재별 본세탁 바구니로 즉시 분류" },
+                { num: 6, title: "시스템 스캔 (본인 계정)", desc: "분류 완료 후 반드시 본인 계정으로 스캔 등록" }
+            ],
+            referenceTable: {
+                title: "얼룩 판단 기준",
+                headers: ["구분", "판단 기준", "이동 공정"],
+                rows: [
+                    ["얼룩 없음", "육안 확인 이상 없음", "즉시 본세탁"],
+                    ["얼룩 있음 (소범위)", "지름 2cm 미만", "프리스파팅 → 본세탁"],
+                    ["얼룩 있음 (중범위)", "지름 2cm 이상", "전처리 → 본세탁"],
+                    ["변색 / 손상 의심", "탈색·구멍·올 풀림 등", "담당 팀장 보고 후 처리"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "소재 확인 없이 임의로 드라이/웨트 구분 금지. 모르면 반드시 팀장에게 확인." }
+            ]
+        },
+        {
+            sopCode: "SOP-02",
+            docNo: "LG-SOP-02",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "드라이 전처리 공정",
+            category: "드라이클리닝",
+            icon: "fa-spray-can-sparkles",
+            colorClass: "indigo",
+            objective: "드라이클리닝 투입 전, 목·소매·주머니 및 얼룩 부위를 집중 전처리하여 세탁 효과를 극대화한다.",
+            steps: [
+                { num: 1, title: "작업 테이블에 의류 펼치기", desc: "안감·주요 오염 부위가 위로 오도록 배치" },
+                { num: 2, title: "D51 도포", desc: "목·소매·주머니 부위에 균일하게 도포" },
+                { num: 3, title: "솔로 전처리", desc: "원단 결 방향으로 부드럽게 문지름 (원형 솔질 금지)" },
+                { num: 4, title: "모직류 음식물 얼룩 처리", desc: "분무기로 물 소량 분사 → 솔 전처리 → 유화 작업" },
+                { num: 5, title: "유화 작업", desc: "약품이 섬유 깊이 침투하도록 30초 이상 대기" },
+                { num: 6, title: "드라이 본세탁 투입", desc: "전처리 완료 의류 드라이 망에 넣어 투입" },
+                { num: 7, title: "시스템 스캔 (본인 계정)", desc: "투입 전 반드시 본인 계정 스캔" }
+            ],
+            referenceTable: {
+                title: "사용 약품 정보 및 주의사항",
+                headers: ["약품명", "용도", "주의사항"],
+                rows: [
+                    ["D51 (쇼프)", "목·소매·주머니 오염 분해", "직접 피부 접촉 금지"],
+                    ["분무기 (물)", "모직류 음식물 얼룩 습윤", "과다 분사 금지 (원단 변형 주의)"]
+                ]
+            },
+            attention: [
+                { type: "warn", text: "모직·캐시미어는 과도한 솔질 시 필링(보풀) 발생. 가볍게 두드리듯 처리." },
+                { type: "info", text: "드라이 후 식물성 기름이 열에 의해 올라올 수 있음 → 검증 단계에서 발견 시 예외 코드 처리 (재처리 의뢰)" }
+            ]
+        },
+        {
+            sopCode: "SOP-03",
+            docNo: "LG-SOP-03",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "프리스파팅 공정",
+            category: "특수 오염 제거",
+            icon: "fa-flask",
+            colorClass: "teal",
+            objective: "드라이클리닝 투입 전, 소범위 얼룩에 7종 약품을 직접 적용하여 본세탁 효과를 높인다.",
+            steps: [
+                { num: 1, title: "얼룩 종류 파악", desc: "냄새·색상·질감으로 얼룩 유형 추정" },
+                { num: 2, title: "적합 약품 선택", desc: "아래 7종 약품 용도 기준으로 1차 약품 선택" },
+                { num: 3, title: "약품 소량 도포", desc: "면봉 또는 스팟건으로 얼룩 부위에만 도포" },
+                { num: 4, title: "30초~1분 반응 대기", desc: "약품 침투 시간 확보 (절대 문지르지 말 것)" },
+                { num: 5, title: "완전 건조 확인", desc: "약품 잔류 여부 확인 후 건조 완료 시 다음 단계 진행" },
+                { num: 6, title: "드라이 본세탁 투입", desc: "건조 완료된 의류 드라이 망에 넣어 투입" },
+                { num: 7, title: "시스템 스캔 (본인 계정)", desc: "투입 전 반드시 본인 계정 스캔" }
+            ],
+            referenceTable: {
+                title: "7종 약품 용도 구분 및 처리 불가 기준",
+                headers: ["약품 유형", "주요 적용 얼룩", "비고 / 판단"],
+                rows: [
+                    ["단백질 / 지방", "혈액·땀 / 식용유·버터", "기름기는 온수 처리 시 효과 우수"],
+                    ["산성 / 알칼리", "커피·과일 / 잉크·볼펜", "중화 공정 거친 후 교차 사용"],
+                    ["산화 / 환원제", "황변·곰팡이 / 염료·립스틱", "소재 사전 확인 및 산화 후 환원"],
+                    ["범용 스팟제", "복합 및 원인불명 얼룩", "기본 1차 사용 약품"],
+                    ["처리 불가 상황", "2회 시도 후 미반응 및 손상 우려", "스파팅 전문가 인계 혹은 즉시 중단"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "절대 금지: 완전 건조 전 드라이 투입 → 약품 가열 반응으로 원단 즉시 손상 위험" }
+            ]
+        },
+        {
+            sopCode: "SOP-04",
+            docNo: "LG-SOP-04",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "웨트 전처리 공정",
+            category: "물세탁 케어",
+            icon: "fa-soap",
+            colorClass: "teal",
+            objective: "물세탁 투입 전, 런드리고 전처리제 및 7종 약품으로 얼룩을 처리하여 본세탁 효율을 높인다.",
+            steps: [
+                { num: 1, title: "얼룩 유형 확인", desc: "소재·얼룩 종류 파악" },
+                { num: 2, title: "런드리고 전처리제 도포", desc: "얼룩 부위 중심으로 균일 도포" },
+                { num: 3, title: "불림 대기 10분 (필수)", desc: "타이머 사용 필수 — 10분 미만 투입 금지" },
+                { num: 4, title: "필요 시 7종 약품 추가", desc: "전처리제 반응 후에도 오점 잔존 시 해당 약품 추가 도포" },
+                { num: 5, title: "가볍게 문지르기", desc: "원단 결 방향 준수 및 과도한 마찰 절대 금지" },
+                { num: 6, title: "본세탁 투입", desc: "대기 완료 후 물세탁 기계 적합 코스 투입" },
+                { num: 7, title: "시스템 스캔 (본인 계정)", desc: "투입 전 반드시 본인 계정 스캔" }
+            ],
+            referenceTable: {
+                title: "소재별 전처리 대기 수칙 및 주의사항",
+                headers: ["소재 분류", "주의사항", "대기 타임"],
+                rows: [
+                    ["면 / 폴리에스터", "일반 전처리제 처리 가능", "정상 불림 (10분)"],
+                    ["울 / 캐시미어", "전처리제 최소량 사용", "불림 단축 (5분 이내)"],
+                    ["실크 / 레이온", "약품 직접 도포 절대 금지", "즉시 팀장 확인 요망"],
+                    ["방수 코팅 소재", "강한 약품 접촉 차단 (코팅 박리)", "지침 엄격 준수"]
+                ]
+            },
+            attention: [
+                { type: "warn", text: "주의: 불림 대기 중 의류를 방치하지 말 것. 타이머 설정 후 다음 작업 진행." }
+            ]
+        },
+        {
+            sopCode: "SOP-05",
+            docNo: "LG-SOP-05",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "본세탁 공정 (드라이/웨트)",
+            category: "세탁 가동",
+            icon: "fa-water",
+            colorClass: "indigo",
+            objective: "전처리 완료 의류를 소재·오염도에 맞는 세탁 방식으로 처리한다.",
+            steps: [
+                { num: 1, title: "소재·전처리 완료 확인", desc: "라벨 및 마킹 확인 후 적합 기계 배정" },
+                { num: 2, title: "색상 분리 투입", desc: "밝은색/어두운색 혼합 투입 절대 금지" },
+                { num: 3, title: "코스·온도·세제량 설정", desc: "소재별 드라이/웨트 표준 기준 준수" },
+                { num: 4, title: "세탁 가동 및 완료 확인", desc: "종료 후 즉시 꺼내기 (기계 방치 시 주름 유발)" },
+                { num: 5, title: "시스템 스캔 (본인 계정)", desc: "세탁 완료 후 본인 계정 스캔 필수" }
+            ],
+            referenceTable: {
+                title: "드라이클리닝 vs 물세탁(웨트) 세부 표준",
+                headers: ["구분", "투입/기본 기준", "온도 및 코스"],
+                rows: [
+                    ["드라이클리닝", "전처리/프리스파팅 완전 건조 및 단독 분리망", "소재 라벨 기준 (울/실크 코스)"],
+                    ["물세탁(웨트)", "전처리제 불림 10분 대기 완료 여부 확인", "면·폴리: 40°C / 울: 30°C / 실크: 냉수"],
+                    ["투입 용량 제한", "드라이: 기계 용량의 70% 이하 유지", "탈수 강도: 울·실크 무조건 저속/배제"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "절대 금지: 드라이 전용 의류를 물세탁 투입 / 물세탁 전용을 드라이 투입 → 발견 시 즉시 팀장 보고" }
+            ]
+        },
+        {
+            sopCode: "SOP-06",
+            docNo: "LG-SOP-06",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "건조 공정",
+            category: "건조 및 형태화",
+            icon: "fa-wind",
+            colorClass: "indigo",
+            objective: "세탁 완료 의류를 소재에 맞는 방식으로 건조하여 변형·수축을 방지한다.",
+            steps: [
+                { num: 1, title: "세탁 완료 의류 즉시 꺼내기", desc: "세탁 종료 후 5분 이내 토출 필수" },
+                { num: 2, title: "소재 라벨 재확인", desc: "건조 방법 최종 결정" },
+                { num: 3, title: "기계 건조 / 자연 건조 분류", desc: "소재별 물리적 수축률 한계에 따라 분리" },
+                { num: 4, title: "건조 완료 확인", desc: "완전 건조 여부 촉감 확인 (특히 솔기·주머니·두꺼운 부위)" },
+                { num: 5, title: "행어 또는 폴딩 처리", desc: "의류의 고유 형태를 유지하며 정리 정돈" },
+                { num: 6, title: "시스템 스캔 (본인 계정)", desc: "건조 완료 후 본인 계정 스캔 이행" }
+            ],
+            referenceTable: {
+                title: "소재별 최적 건조 방식 가이드",
+                headers: ["소재 분류", "건조 기법", "온도 한계 및 주의사항"],
+                rows: [
+                    ["면 / 폴리에스터", "회전식 기계 건조", "중온 (60°C 이하 설정)"],
+                    ["울 / 캐시미어", "평평하게 눕혀서 자연건조", "기계 건조 절대 불가 (수축 직결)"],
+                    ["실크 / 레이온", "행어를 사용한 그늘 자연건조", "직사광선 노출 금지 (황변 발생)"],
+                    ["다운 / 패딩", "저온 기계 건조 + 중간 털기", "충전재 뭉침 완전 복원 및 방지"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "주의: 완전 건조 전에 검증 공정 투입 금지 → 의류 내부 습기로 인한 곰팡이 및 악취 발생의 치명적 원인" }
+            ]
+        },
+        {
+            sopCode: "SOP-07",
+            docNo: "LG-SOP-07",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "검증 공정 (QC)",
+            category: "품질 보증",
+            icon: "fa-clipboard-check",
+            colorClass: "teal",
+            objective: "건조 완료 의류의 세탁 결과를 최종 확인하여 적합/부적합을 판정하고, 부적합 의류는 재처리로 인계한다.",
+            steps: [
+                { num: 1, title: "의류 펼쳐 전체 육안 확인", desc: "밝은 조명 아래 앞·뒤·안감·솔기 구석구석 확인" },
+                { num: 2, title: "얼룩 잔존 여부 검증", desc: "진단 단계에서 등록된 전처리 마킹 위치 중점 체크" },
+                { num: 3, title: "형태 및 손상 여부 확인", desc: "수축·변형·탈색·올 풀림 확인" },
+                { num: 4, title: "적합 판정 → 출하 승인", desc: "이상 무 확인 완료 시 포장 기계 인계 및 완료 스캔" },
+                { num: 5, title: "부적합 발견 → 등록 스캔", desc: "본인 계정으로 즉시 시스템에 부적합 등록" },
+                { num: 6, title: "재처리 공정 인계", desc: "잔존 오점 위치 및 범위를 입력하고 담당자 인계" }
+            ],
+            referenceTable: {
+                title: "판정 기준 및 데이터 상호 검증 포인트",
+                headers: ["판정 유형", "판정 기준", "시스템 검증 포인트"],
+                rows: [
+                    ["적합 판정", "얼룩 및 손상 제로, 원형 완벽 보존", "출고 락 해제 및 바코드 인코딩"],
+                    ["부적합 (재처리)", "소·중범위 얼룩 잔존", "스파팅 또는 재세탁 강제 인계 분류"],
+                    ["부적합 (고객안내)", "완제 불가 또는 섬유 자체 대미지", "SOP-10 고객 소통 프로토콜 연결"],
+                    ["데이터 크로스 체크", "진단 스캔 이력 vs 전처리 유무 비교", "공정별 타임스탬프 누락 역추적"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "부적합 누락 절대 금지: 오염 잔존 발견 즉시 부적합 등록 필수. 누락 출고 시 즉시 고객 VOC로 직결되며 팀 평가 점수에 마이너스 반영." }
+            ]
+        },
+        {
+            sopCode: "SOP-08",
+            docNo: "LG-SOP-08",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "스파팅 (재처리) 공정",
+            category: "품질 보정",
+            icon: "fa-eraser",
+            colorClass: "rose",
+            objective: "검증 단계에서 부적합 판정된 의류의 잔존 얼룩을 집중 스파팅으로 제거한다.",
+            steps: [
+                { num: 1, title: "부적합 인계 의류 수령", desc: "검증 파트의 인계 메모(얼룩 위치·유형) 확인" },
+                { num: 2, title: "얼룩 상태 재진단", desc: "밝은 조명 및 확대경 활용 오점 심도 파악" },
+                { num: 3, title: "약품 정밀 적용 및 스팟 처리", desc: "7종 화학 약품 중 선별 도포 후 스팟건 유화(반복)" },
+                { num: 4, title: "원단 손상 여부 최종 검증", desc: "얼룩 제거 도중 섬유 보풀 및 탈색 발생 여부 확인" },
+                { num: 5, title: "재건조 후 검증 공정 재진입", desc: "SOP-06 건조 공정을 거쳐 검증 파트로 재전송" },
+                { num: 6, title: "시스템 스캔 (본인 계정)", desc: "작업 완료 상태에 대한 스캔 등록 필수" }
+            ],
+            referenceTable: {
+                title: "스파팅 vs 재세탁 판단 및 시간 기준",
+                headers: ["처리 분류", "적용 조건", "시간적 한계 및 조치"],
+                rows: [
+                    ["집중 스파팅", "지름 2cm 미만의 국소 얼룩", "1차 시도: 5분 이내 미반응 시 2차 약품 변경"],
+                    ["재세탁 인계", "지름 2cm 이상 및 복합 광범위 오염", "2차 시도: 10분 이내 무반응 시 재세탁 공정 이송"],
+                    ["작업 중단", "무리한 처리 시 원단 훼손 우려", "누적 처리 30분 초과 시 강제 중지 및 고객 조율"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "무리한 스파팅 금지: 화학 약품과 마찰로 섬유 변형/탈색 유발 시 VOC 직결. 복원이 의심스럽다면 작업을 중단하고 팀장에게 조언을 구하십시오." }
+            ]
+        },
+        {
+            sopCode: "SOP-09",
+            docNo: "LG-SOP-09",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "재세탁 판단 및 처리 공정",
+            category: "품질 보정",
+            icon: "fa-rotate",
+            colorClass: "rose",
+            objective: "스파팅으로 처리 불가한 중범위 이상 얼룩 의류를 재세탁하여 최대한 제거한다.",
+            steps: [
+                { num: 1, title: "재세탁 대상 수령 및 상태 확인", desc: "재처리 파트의 상세 메모 및 기존 손상 확인" },
+                { num: 2, title: "강력 전처리 재실시", desc: "SOP-03(드라이) 및 SOP-04(웨트) 기준 전처리 전면 보강" },
+                { num: 3, title: "재세탁 전용 최적 코스 설정", desc: "일반 세탁 대비 코스 1단계 강화 혹은 세탁 온도 +5°C 이내" },
+                { num: 4, title: "세탁 종료 직후 즉시 추출", desc: "오점 보정 결과 토출 즉시 관찰" },
+                { num: 5, title: "정상 건조 및 재검증 투입", desc: "SOP-06 건조 후 SOP-07 검증 흐름으로 원대 복귀" },
+                { num: 6, title: "시스템 결과 스캔", desc: "재세탁 처리 결과 피드백을 시스템에 완료/실패 스캔" }
+            ],
+            referenceTable: {
+                title: "재세탁 진입 장벽 및 횟수 한계 규칙",
+                headers: ["체크 항목", "안전 가이드라인", "수행 한계 수칙"],
+                rows: [
+                    ["얼룩 범위 및 소재", "2cm 이상 광범위 및 재세탁 견딤성 유무 확인", "1회 재세탁: 일반적인 부적합 복원 코스"],
+                    ["수행 전 사전 탈색", "섬유에 기 발생한 마모 유무 필히 점검", "2회 재세탁: 특수 오염 적용, 팀장 사전 승인 요망"],
+                    ["기존 세탁 횟수", "이미 2회 이상 가동된 의류는 누적 대미지 주의", "3회 이상: 섬유 박리 위험 초과 → 작업 중단"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "경고: 재세탁 도중 원단 뒤틀림 및 수축 등의 기계적 대미지 발견 즉시 작업을 전면 중단하고 팀장 보고 체계를 가동하십시오." }
+            ]
+        },
+        {
+            sopCode: "SOP-10",
+            docNo: "LG-SOP-10",
+            version: "v1.0",
+            lastUpdate: "2025-06",
+            title: "고객 안내 처리 공정",
+            category: "고객 케어",
+            icon: "fa-comment-dots",
+            colorClass: "rose",
+            objective: "완전 제거 불가 얼룩·손상 의류에 대해 고객에게 신속·정확하게 안내하여 신뢰를 유지한다.",
+            steps: [
+                { num: 1, title: "불가 판단 즉시 작업 중단", desc: "추가 마모 방지를 위해 현 상태 그대로 보존" },
+                { num: 2, title: "의류 정밀 고화질 촬영", desc: "얼룩 위치, 잔존 형태, 미세 탈색 부위 사진 채득" },
+                { num: 3, title: "시스템 고객 소통 요청 등록", desc: "안내 유형(지연/제거불가/손상우려) 설정 및 사유 메모" },
+                { num: 4, title: "안심 알림 발송 모니터링", desc: "알림 전송 성공 확인 후 진행 상황 보존" },
+                { num: 5, title: "의류 특수 전용 보관 구역 이동", desc: "일반 완료 의류와 섞이지 않도록 차단 격리 분리" },
+                { num: 6, title: "담당 팀장 현장 구두 보고", desc: "고객 피드백 사전 공유 및 보고" },
+                { num: 7, title: "시스템 스캔 (본인 계정)", desc: "처리가 완결되었음을 계정 스캔으로 최종 마감" }
+            ],
+            referenceTable: {
+                title: "안내 유형별 발송 조건 및 조치 기준",
+                headers: ["안내 분류", "트리거 조건", "메시지 필수 기재 사유"],
+                rows: [
+                    ["지연 안내", "당일 출고 불가 및 특수 케어 처리 연장", "케어 상세 계획 및 재약속 완료일"],
+                    ["얼룩 제거 불가", "스파팅 및 재세탁 완료 후에도 2cm 이상 보존", "물리적 손상 한계 및 안전 수위 설명"],
+                    ["손상 우려 중단", "무리한 화학 반응 시 실 풀림 및 염색 유실", "작업 안전 중단 원인 상세 기재"]
+                ]
+            },
+            attention: [
+                { type: "danger", text: "절대 준수 원칙: 고객 안내 및 동의 절차 없이 손상 및 미제거 의류를 임의 출하하는 행위를 강력히 금지합니다. 발견 시 책임 소지가 발생합니다." },
+                { type: "info", text: "신속성 원칙: 고객 안내 등록은 신속할수록 브랜드 신뢰도가 상승합니다. 확인 과정에서 지체하지 말고 즉시 접수하는 습관을 들여 주십시오." }
+            ]
+        }
+    ];
+    /* END_SOP_DATA */
+
+    // sopData를 window에서 참조 (Firebase 연동)
+    const getSopData = () => window.sopData;
+    let currentSopIndex = 0;
+    let isEditMode = false; // 실시간 편집 모드 상태 관리
+
+    // 커스텀 토스트 알림 함수 (alert() 대체용 안전 제어 수단)
+    function showCustomToast(message) {
+        const toast = document.getElementById("custom-toast");
+        const toastMsg = document.getElementById("toast-message");
+        toastMsg.innerText = message;
+        toast.style.transform = "translateY(0)";
+        toast.style.opacity = "1";
+        setTimeout(() => {
+            toast.style.transform = "translateY(80px)";
+            toast.style.opacity = "0";
+        }, 4000);
+    }
+
+    // 화면 비율 맞춤 자동 크기 조정 (Auto Scaling) 로직
+    function adjustWindowScale() {
+        const wrapper = document.querySelector('.presentation-wrapper');
+        const targetWidth = 1280;
+        const targetHeight = 720;
+        
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        
+        // 16:9 비율 유지하면서 가로, 세로 영역 중 작은 쪽의 배율에 맞추어 완전 축소/확대
+        const scale = Math.min(windowWidth / targetWidth, windowHeight / targetHeight);
+        
+        wrapper.style.transform = `scale(${scale})`;
+        wrapper.style.transformOrigin = 'center center';
+    }
+
+    // 편집상태에 따라 contenteditable 속성과 스타일을 주입하는 핵심 헬퍼 함수
+    function editableAttr(type, index1 = null, index2 = null) {
+        if (!isEditMode) return '';
+        
+        let onblurAction = '';
+        if (type === 'title') onblurAction = `updateSOPField('title', this.innerText)`;
+        else if (type === 'objective') onblurAction = `updateSOPField('objective', this.innerText)`;
+        else if (type === 'stepTitle') onblurAction = `updateSOPStep(${index1}, 'title', this.innerText)`;
+        else if (type === 'stepDesc') onblurAction = `updateSOPStep(${index1}, 'desc', this.innerText)`;
+        else if (type === 'tableTitle') onblurAction = `updateSOPTableTitle(this.innerText)`;
+        else if (type === 'tableHeader') onblurAction = `updateSOPTableHeader(${index1}, this.innerText)`;
+        else if (type === 'tableCell') onblurAction = `updateSOPTableCell(${index1}, ${index2}, this.innerText)`;
+        else if (type === 'attention') onblurAction = `updateSOPAttention(${index1}, this.innerText)`;
+
+        return `contenteditable="true" class="editable-active-style outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white hover:bg-slate-100 border border-dashed border-indigo-300 rounded px-1 transition duration-150" onblur="${onblurAction}"`;
+    }
+
+    // 데이터 실시간 업데이트 컨트롤러
+    function updateSOPField(field, value) {
+        const sopData = window.sopData || [];
+        sopData[currentSopIndex][field] = value.trim();
+        if (field === 'title') {
+            renderAsideMenu(); // 사이드바 제목도 연계하여 즉시 갱신
+        }
+    }
+
+    function updateSOPStep(stepIndex, key, value) {
+        const sopData = window.sopData || [];
+        sopData[currentSopIndex].steps[stepIndex][key] = value.trim();
+    }
+
+    function updateSOPTableTitle(value) {
+        const sopData = window.sopData || [];
+        sopData[currentSopIndex].referenceTable.title = value.trim();
+    }
+
+    function updateSOPTableHeader(index, value) {
+        const sopData = window.sopData || [];
+        sopData[currentSopIndex].referenceTable.headers[index] = value.trim();
+    }
+
+    function updateSOPTableCell(rowIndex, colIndex, value) {
+        const sopData = window.sopData || [];
+        sopData[currentSopIndex].referenceTable.rows[rowIndex][colIndex] = value.trim();
+    }
+
+    function updateSOPAttention(index, value) {
+        const sopData = window.sopData || [];
+        sopData[currentSopIndex].attention[index].text = value.trim();
+    }
+
+    // 편집모드 토글 스위치
+    function toggleEditMode() {
+        isEditMode = !isEditMode;
+        window._isEditing = isEditMode; // 편집 중일 때 realtime 업데이트 차단
+        const btn = document.getElementById("edit-mode-btn");
+        const btnText = document.getElementById("edit-mode-text");
+        const downloadBtn = document.getElementById("download-btn");
+        const editHintBox = document.getElementById("edit-hint-box");
+
+        if (isEditMode) {
+            btn.classList.replace("bg-indigo-600", "bg-rose-600");
+            btn.classList.replace("hover:bg-indigo-700", "hover:bg-rose-700");
+            btnText.innerText = "편집 완료 (읽기 전용)";
+            downloadBtn.classList.remove("hidden");
+            editHintBox.classList.remove("hidden");
+            showCustomToast("편집 모드가 활성화되었습니다. 내용을 클릭해 보정하세요.");
+        } else {
+            btn.classList.replace("bg-rose-600", "bg-indigo-600");
+            btn.classList.replace("hover:bg-rose-700", "hover:bg-indigo-700");
+            btnText.innerText = "편집 모드 활성화";
+            downloadBtn.classList.add("hidden");
+            editHintBox.classList.add("hidden");
+            showCustomToast("편집이 비활성화되었습니다. 읽기 전용 상태입니다.");
+        }
+        renderActiveSlide();
+    }
+
+    // 수정된 데이터를 완전히 직렬화하여 새로운 HTML 다운로드
+    function exportModifiedHTML() {
+        const originalHtml = document.documentElement.outerHTML;
+        const startMarker = "/* START_SOP_DATA */";
+        const endMarker = "/* END_SOP_DATA */";
+        
+        const startIndex = originalHtml.indexOf(startMarker);
+        const endIndex = originalHtml.indexOf(endMarker);
+
+        if (startIndex !== -1 && endIndex !== -1) {
+            const before = originalHtml.substring(0, startIndex + startMarker.length);
+            const after = originalHtml.substring(endIndex);
+            
+            // 데이터 직렬화 시 들여쓰기를 살려서 정돈된 코드 생성
+            const updatedDataScript = `\n    const sopData = ${JSON.stringify(sopData, null, 8)};\n    `;
+            
+            // DOCTYPE 수동 추가 복구
+            const finalHtml = "<!DOCTYPE html>\n" + before + updatedDataScript + after;
+            
+            // 파일 다운로드 브라우저 트리거
+            const blob = new Blob([finalHtml], { type: "text/html;charset=utf-8" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "laundry_sop_handbook_edited.html";
+            link.click();
+            showCustomToast("수정된 가이드라인 SOP 파일이 성공적으로 생성 및 다운로드되었습니다.");
+        } else {
+            showCustomToast("SOP 원본 데이터 구역의 인덱스 마킹이 유실되어 파일 저장에 실패했습니다.");
+        }
+    }
+
+    // Aside 메뉴 바인딩 함수
+    window.renderAsideMenu = function renderAsideMenu() {
+        const menuContainer = document.getElementById("aside-menu");
+        menuContainer.innerHTML = "";
+        const sopData = window.sopData || [];
+        sopData.forEach((sop, index) => {
+            const isActive = index === currentSopIndex;
+            const activeClass = isActive 
+                ? "bg-indigo-50 border-l-4 border-indigo-600 text-indigo-900" 
+                : "text-slate-600 hover:bg-slate-50 border-l-4 border-transparent hover:text-slate-900";
+            
+            const badgeColor = sop.colorClass === 'indigo' ? 'bg-indigo-100 text-indigo-700' : 
+                               sop.colorClass === 'teal' ? 'bg-teal-100 text-teal-700' : 'bg-rose-100 text-rose-700';
+
+            const buttonHtml = `
+                <button onclick="selectSOP(${index})" class="w-full flex items-center justify-between p-2.5 rounded-lg text-left transition duration-200 ${activeClass}">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-md flex items-center justify-center text-xs ${badgeColor}">
+                            <i class="fa-solid ${sop.icon}"></i>
+                        </div>
+                        <div>
+                            <p class="font-montserrat text-[10px] font-black text-slate-400 leading-none">${sop.sopCode}</p>
+                            <h4 class="text-xs font-bold mt-1 leading-snug break-all">${sop.title}</h4>
+                        </div>
+                    </div>
+                    <span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded flex-shrink-0 ${badgeColor}">${sop.category}</span>
+                </button>
+            `;
+            menuContainer.innerHTML += buttonHtml;
+        });
+    }
+
+    // 메인 슬라이드 렌더링 엔진
+    window.renderActiveSlide = function renderActiveSlide() {
+        const sopData = window.sopData || [];
+        const sop = sopData[currentSopIndex];
+        const canvas = document.getElementById("sop-slide-canvas");
+        
+        // 헤더 뱃지 색상 동적 매핑
+        const themeColorHex = sop.colorClass === 'indigo' ? '#4f46e5' : 
+                              sop.colorClass === 'teal' ? '#0d9488' : '#be123c';
+        
+        const themeBgLight = sop.colorClass === 'indigo' ? 'bg-indigo-50 text-indigo-800' : 
+                             sop.colorClass === 'teal' ? 'bg-teal-50 text-teal-800' : 'bg-rose-50 text-rose-800';
+
+        // 1. 단계별 플로우 렌더링
+        let stepsHtml = "";
+        sop.steps.forEach((step, stepIdx) => {
+            stepsHtml += `
+                <div class="flex items-start gap-3.5 group">
+                    <span class="w-5 h-5 rounded-full flex items-center justify-center text-[10.5px] font-bold mt-0.5 flex-shrink-0 transition duration-200" 
+                          style="background-color: ${themeColorHex}; color: white;">
+                        ${step.num}
+                    </span>
+                    <div class="flex-grow">
+                        <h4 ${editableAttr('stepTitle', stepIdx)} class="text-[12.5px] font-black text-slate-900 group-hover:text-indigo-600 transition leading-tight">${step.title}</h4>
+                        <p ${editableAttr('stepDesc', stepIdx)} class="text-[11px] text-slate-500 mt-0.5 leading-normal">${step.desc}</p>
+                    </div>
+                </div>
+            `;
+        });
+
+        // 2. 우측 테이블 헤더 및 로우 동적 구성
+        let tableHeadersHtml = "";
+        sop.referenceTable.headers.forEach((header, hIdx) => {
+            tableHeadersHtml += `<th ${editableAttr('tableHeader', hIdx)} class="py-2 px-3 text-left font-bold text-slate-600 text-[10px] uppercase tracking-wider">${header}</th>`;
+        });
+
+        let tableRowsHtml = "";
+        sop.referenceTable.rows.forEach((row, rIdx) => {
+            let colsHtml = "";
+            row.forEach((col, cIdx) => {
+                const textStyle = cIdx === 0 ? "font-bold text-slate-900" : "text-slate-600";
+                colsHtml += `<td ${editableAttr('tableCell', rIdx, cIdx)} class="py-2 px-3 text-[10.5px] border-b border-slate-100 ${textStyle}">${col}</td>`;
+            });
+            tableRowsHtml += `<tr class="hover:bg-slate-50/50 transition">${colsHtml}</tr>`;
+        });
+
+        // 3. 주의 사항 알림 카드 구조 렌더링
+        let attentionsHtml = "";
+        sop.attention.forEach((att, attIdx) => {
+            const isDanger = att.type === 'danger';
+            const isInfo = att.type === 'info';
+            const cardBg = isDanger ? 'bg-rose-50 border-rose-200 text-rose-800' : 
+                           isInfo ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-amber-50 border-amber-200 text-amber-800';
+            const icon = isDanger ? 'fa-circle-exclamation' : 
+                         isInfo ? 'fa-circle-info' : 'fa-triangle-exclamation';
+
+            attentionsHtml += `
+                <div class="border rounded-xl p-3 flex items-start gap-2.5 shadow-sm leading-relaxed ${cardBg}">
+                    <i class="fa-solid ${icon} mt-0.5 text-xs flex-shrink-0"></i>
+                    <p ${editableAttr('attention', attIdx)} class="text-[10.5px] font-semibold flex-grow">${att.text}</p>
+                </div>
+            `;
+        });
+
+        // 4. 메인 템플릿 머징
+        canvas.innerHTML = `
+            <div class="flex-grow flex flex-col justify-between overflow-hidden">
+                <!-- 슬라이드 내부 헤더 -->
+                <div class="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg ${themeBgLight}">
+                            <i class="fa-solid ${sop.icon}"></i>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-black tracking-widest text-slate-400 uppercase font-montserrat">${sop.sopCode} • ${sop.category}</span>
+                            <h2 ${editableAttr('title')} class="text-xl font-black text-slate-900 leading-tight">${sop.title}</h2>
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-extrabold px-3 py-1 bg-slate-100 text-slate-600 rounded-full font-montserrat">STANDARD PROCEDURE</span>
+                </div>
+
+                <!-- 목적 요약 바 -->
+                <div class="bg-white border border-slate-200 rounded-xl p-3 flex items-center gap-3.5 mb-5 shadow-sm">
+                    <div class="px-2.5 py-1 rounded text-[10px] font-extrabold text-white uppercase flex-shrink-0" style="background-color: ${themeColorHex}">목적</div>
+                    <p ${editableAttr('objective')} class="text-[11px] font-bold text-slate-700 leading-snug flex-grow">${sop.objective}</p>
+                </div>
+
+                <!-- 핵심 2분할 콘텐츠 그리드 -->
+                <div class="grid grid-cols-12 gap-6 flex-grow items-stretch overflow-hidden mb-auto">
+                    
+                    <!-- 좌측 컬럼 (작업 표준 흐름) -->
+                    <div class="col-span-5 bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between shadow-sm overflow-hidden h-[340px]">
+                        <h3 class="text-xs font-black text-slate-800 flex items-center gap-2 mb-3">
+                            <i class="fa-solid fa-list-check" style="color: ${themeColorHex};"></i> 정밀 작업 표준 단계
+                        </h3>
+                        <div class="space-y-3.5 overflow-y-auto pr-1 custom-scrollbar max-h-[270px]">
+                            ${stepsHtml}
+                        </div>
+                    </div>
+
+                    <!-- 우측 컬럼 (판단표 및 안전 수칙) -->
+                    <div class="col-span-7 flex flex-col justify-between gap-3 h-[340px] overflow-hidden">
+                        <!-- 가이드 레퍼런스 표 -->
+                        <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col justify-between shadow-sm h-[200px] overflow-hidden">
+                            <h3 ${editableAttr('tableTitle')} class="text-xs font-black text-slate-800 flex items-center gap-2 mb-2 flex-shrink-0">
+                                <i class="fa-solid fa-table" style="color: ${themeColorHex};"></i> ${sop.referenceTable.title}
+                            </h3>
+                            <div class="overflow-y-auto custom-scrollbar flex-grow pr-1">
+                                <table class="w-full border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200">
+                                            ${tableHeadersHtml}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${tableRowsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 주의 수칙 모음 카드 영역 -->
+                        <div class="flex flex-col gap-2 overflow-y-auto custom-scrollbar h-[130px]">
+                            ${attentionsHtml}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        `;
+
+        // 5. 하단 글로벌 메타데이터 갱신
+        document.getElementById("footer-doc-no").innerText = `문서번호: ${sop.docNo}`;
+        document.getElementById("footer-version").innerText = `버전: ${sop.version}`;
+        document.getElementById("footer-last-update").innerText = `최종수정: ${sop.lastUpdate}`;
+        document.getElementById("footer-progress").innerText = `${currentSopIndex + 1} / ${(window.sopData || []).length}`;
+    }
+
+    // SOP 선택 함수
+    window.selectSOP = function selectSOP(index) {
+        const sopData = window.sopData || [];
+        if (index < 0 || index >= sopData.length) return;
+        currentSopIndex = index;
+        renderAsideMenu();
+        renderActiveSlide();
+    }
+
+    // 이전/다음 내비게이션
+    function prevSOP() {
+        if (currentSopIndex > 0) {
+            selectSOP(currentSopIndex - 1);
+        }
+    }
+
+    function nextSOP() {
+        if (currentSopIndex < sopData.length - 1) {
+            selectSOP(currentSopIndex + 1);
+        }
+    }
+
+    // 키보드 좌우 방향키 네비게이션 적용
+    document.addEventListener("keydown", function(event) {
+        // 편집 중일 때는 방향키에 의한 장표 넘기기 차단
+        if (document.activeElement.hasAttribute('contenteditable')) {
+            return;
+        }
+        if (event.key === "ArrowRight" || event.key === "39") {
+            nextSOP();
+        } else if (event.key === "ArrowLeft" || event.key === "37") {
+            prevSOP();
+        }
+    });
+
+    // 화면 첫 로딩 및 크기 변경 감지 이벤트 바인딩
+    window.onload = function() {
+        adjustWindowScale();
+        // Firebase 로그인 후 데이터 로드되면 자동 렌더링됨
+        // 비로그인 상태에서는 로그인 모달이 표시됨
+    };
+
+    window.addEventListener('resize', adjustWindowScale);
+</script>
+
+</body>
+</html>
